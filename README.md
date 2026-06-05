@@ -50,3 +50,11 @@ python -m opinion_agent brief --plan examples\briefing_plan.example.json
 ```
 
 The generated Markdown file is written under `output/briefings/`.
+
+Generate a citation-gated report from sample evidence and claims:
+
+```powershell
+python -m opinion_agent report --topic "Personal public-opinion observation" --evidence examples\sample_evidence.jsonl --claims examples\report_claims.example.json
+```
+
+The generated Markdown file is written under `output/reports/`. Claims that cite unknown evidence IDs are rejected before a report is written.

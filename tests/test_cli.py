@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import json
 
 
 def test_brief_command_writes_markdown_under_output_briefings(tmp_path):
@@ -27,3 +28,98 @@ def test_brief_command_writes_markdown_under_output_briefings(tmp_path):
     assert "# Personal public-opinion observation Briefing" in files[0].read_text(
         encoding="utf-8"
     )
+
+
+def test_report_command_writes_citation_gated_markdown(tmp_path):
+    evidence_path = tmp_path / "evidence.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_id": "ev-1",
+                "source_type": "news",
+                "source_name": "Local News",
+                "url": "https://example.test/update",
+                "author": None,
+                "published_at": "2026-06-05T08:00:00+08:00",
+                "collected_at": "2026-06-05T09:00:00+08:00",
+                "title": "Community update",
+                "content": "A traceable observation about the event.",
+                "metadata": {"fixture": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    claims_path = tmp_path / "claims.json"
+    claims_path.write_text(
+        json.dumps(
+            [
+                {
+                    "text": "Community discussion is measured rather than urgent.",
+                    "evidence_ids": ["ev-1"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "report",
+            "--topic",
+            "Local event",
+            "--evidence",
+            str(evidence_path),
+            "--claims",
+            str(claims_path),
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    reports_dir = tmp_path / "reports"
+    files = list(reports_dir.glob("*.md"))
+    assert len(files) == 1
+    assert "Evidence: ev-1" in files[0].read_text(encoding="utf-8")
+
+
+def test_report_command_rejects_unknown_evidence_without_writing_file(tmp_path):
+    evidence_path = tmp_path / "evidence.jsonl"
+    evidence_path.write_text("", encoding="utf-8")
+    claims_path = tmp_path / "claims.json"
+    claims_path.write_text(
+        json.dumps([{"text": "Unsupported.", "evidence_ids": ["ev-missing"]}]),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "report",
+            "--topic",
+            "Local event",
+            "--evidence",
+            str(evidence_path),
+            "--claims",
+            str(claims_path),
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Unknown evidence_id: ev-missing" in result.stdout
+    assert not (tmp_path / "reports").exists()
