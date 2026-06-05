@@ -1,0 +1,13 @@
+[project]
+name = "opinion-agent"
+version = "0.1.0"
+description = "Local personal public-opinion observation agent."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"

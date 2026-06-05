@@ -1,0 +1,8 @@
+{
+  "topic": "Personal public-opinion observation",
+  "keywords": ["public opinion", "community", "policy"],
+  "schedule": "daily",
+  "max_items": 3,
+  "tone": "calm",
+  "evidence_path": "examples/sample_evidence.jsonl"
+}
