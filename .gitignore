@@ -1,0 +1,30 @@
+# Secrets
+.env
+*.env
+!.env.example
+apikeys.txt
+
+# Runtime outputs
+output/
+outputs/
+logs/
+*.log
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
