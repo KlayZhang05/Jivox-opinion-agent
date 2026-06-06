@@ -78,6 +78,16 @@ def build_research_graph(
             "stage": "planned",
             "trace_events": [
                 TraceEvent(
+                    event_type="role_instance_started",
+                    role_id="forum_host",
+                    metadata={"instance_id": "forum_host"},
+                ),
+                TraceEvent(
+                    event_type="model_call_completed",
+                    role_id="forum_host",
+                    metadata={"output_schema": "ResearchPlan"},
+                ),
+                TraceEvent(
                     event_type="research_plan_created",
                     role_id="forum_host",
                     metadata={"task_count": len(plan.tasks)},
@@ -121,9 +131,16 @@ def build_research_graph(
             tool_payloads = []
             trace_events = [
                 TraceEvent(
-                    event_type="subagent_started",
+                    event_type="role_instance_started",
                     role_id=task.role_id,
                     task_id=task.task_id,
+                    metadata={"instance_id": task.task_id},
+                ),
+                TraceEvent(
+                    event_type="model_call_completed",
+                    role_id=task.role_id,
+                    task_id=task.task_id,
+                    metadata={"output_schema": "SubagentActionPlan"},
                 )
             ]
             for tool_call in action_plan.tool_calls:
@@ -173,6 +190,14 @@ def build_research_graph(
                     sort_keys=True,
                 ),
                 output_schema=SubagentResult,
+            )
+            trace_events.append(
+                TraceEvent(
+                    event_type="model_call_completed",
+                    role_id=task.role_id,
+                    task_id=task.task_id,
+                    metadata={"output_schema": "SubagentResult"},
+                )
             )
             if result.task_id != task.task_id or result.role_id != task.role_id:
                 raise ModelOutputError(

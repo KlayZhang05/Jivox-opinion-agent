@@ -21,6 +21,7 @@ class ReportArtifacts:
 def write_report_artifacts(
     *,
     topic: str,
+    report_title: str | None = None,
     claims: list[dict[str, Any] | ClaimInput],
     evidence_store: EvidenceStore,
     evaluator: SupportEvaluator,
@@ -46,7 +47,12 @@ def write_report_artifacts(
     if errors:
         raise ValueError("; ".join(errors))
 
-    markdown = _render_markdown(topic, results, evidence_store)
+    markdown = _render_markdown(
+        topic,
+        results,
+        evidence_store,
+        report_title=report_title,
+    )
     sidecar = {
         "schema_version": "1.0",
         "topic": topic,
@@ -81,9 +87,11 @@ def _render_markdown(
     topic: str,
     results: list[ClaimVerificationResult],
     evidence_store: EvidenceStore,
+    *,
+    report_title: str | None = None,
 ) -> str:
     lines = [
-        f"# {topic} Public Opinion Report",
+        f"# {report_title or f'{topic} Public Opinion Report'}",
         "",
         f"Date: {date.today().isoformat()}",
         "",
