@@ -1,3 +1,3 @@
-from .generator import generate_report_markdown
+from .generator import ReportArtifacts, write_report_artifacts
 
-__all__ = ["generate_report_markdown"]
+__all__ = ["ReportArtifacts", "write_report_artifacts"]

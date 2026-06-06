@@ -6,11 +6,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .briefing.generator import generate_briefing_markdown
+from .citations.evaluators import ExactQuoteEvaluator
 from .collectors.sample import load_sample_evidence
 from .config import ConfigError, load_briefing_plan
 from .conversation import ConversationPolicy, ConversationSession
 from .evidence.store import EvidenceStore
-from .reports.generator import generate_report_markdown
+from .reports.generator import write_report_artifacts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,20 +89,25 @@ def _slug(value: str) -> str:
 
 
 def _report(topic: str, evidence_path: str, claims_path: str, output_dir: str) -> int:
+    reports_dir = Path(output_dir) / "reports"
+    output_path = reports_dir / f"{_slug(topic)}_report.md"
     try:
         claims = json.loads(Path(claims_path).read_text(encoding="utf-8"))
         if not isinstance(claims, list):
             raise ValueError("claims file must contain a JSON list")
-        markdown = generate_report_markdown(topic, claims, EvidenceStore(evidence_path))
+        artifacts = write_report_artifacts(
+            topic=topic,
+            claims=claims,
+            evidence_store=EvidenceStore(evidence_path),
+            evaluator=ExactQuoteEvaluator(),
+            report_path=output_path,
+        )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"Report error: {exc}")
         return 2
 
-    reports_dir = Path(output_dir) / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    output_path = reports_dir / f"{_slug(topic)}_report.md"
-    output_path.write_text(markdown, encoding="utf-8")
-    print(output_path)
+    print(artifacts.report_path)
+    print(artifacts.verification_path)
     return 0
 
 

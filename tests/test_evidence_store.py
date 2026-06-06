@@ -50,3 +50,26 @@ def test_duplicate_evidence_ids_are_not_written_twice(tmp_path):
 
     assert store.read_all() == [sample_record("ev-dup")]
     assert len(store_path.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_get_many_preserves_order_and_returns_independent_records(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.jsonl")
+    store.append(sample_record("ev-1"))
+    store.append(sample_record("ev-2"))
+
+    records = store.get_many(["ev-2", "ev-1"])
+    records[0]["content"] = "mutated"
+
+    assert [record["evidence_id"] for record in records] == ["ev-2", "ev-1"]
+    assert store.get_many(["ev-2"])[0]["content"] != "mutated"
+
+
+def test_get_many_rejects_duplicate_and_missing_ids(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.jsonl")
+    store.append(sample_record("ev-1"))
+
+    with pytest.raises(ValueError, match="Duplicate evidence IDs"):
+        store.get_many(["ev-1", "ev-1"])
+
+    with pytest.raises(ValueError, match="ev-missing"):
+        store.get_many(["ev-1", "ev-missing"])

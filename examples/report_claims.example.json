@@ -1,10 +1,22 @@
 [
   {
-    "text": "The sample evidence suggests measured public attention rather than an urgent escalation.",
-    "evidence_ids": ["sample-001", "sample-002"]
+    "claim_id": "claim-001",
+    "claim_type": "direct_quote",
+    "text": "Early comments show measured interest and limited concern.",
+    "scope": {
+      "platform": "news",
+      "sample": "single fixture article"
+    },
+    "evidence_ids": ["sample-002"]
   },
   {
-    "text": "Community-oriented resources are present and traceable to a forum-style source.",
+    "claim_id": "claim-002",
+    "claim_type": "direct_quote",
+    "text": "The community list gathers official links and practical next steps.",
+    "scope": {
+      "platform": "community_forum",
+      "sample": "single fixture post"
+    },
     "evidence_ids": ["sample-003"]
   }
 ]

@@ -30,7 +30,7 @@ def test_brief_command_writes_markdown_under_output_briefings(tmp_path):
     )
 
 
-def test_report_command_writes_citation_gated_markdown(tmp_path):
+def test_report_command_writes_support_gated_artifacts(tmp_path):
     evidence_path = tmp_path / "evidence.jsonl"
     evidence_path.write_text(
         json.dumps(
@@ -54,7 +54,10 @@ def test_report_command_writes_citation_gated_markdown(tmp_path):
         json.dumps(
             [
                 {
-                    "text": "Community discussion is measured rather than urgent.",
+                    "claim_id": "claim-1",
+                    "claim_type": "direct_quote",
+                    "text": "A traceable observation about the event.",
+                    "scope": {"platform": "local_news"},
                     "evidence_ids": ["ev-1"],
                 }
             ]
@@ -88,6 +91,11 @@ def test_report_command_writes_citation_gated_markdown(tmp_path):
     files = list(reports_dir.glob("*.md"))
     assert len(files) == 1
     assert "Evidence: ev-1" in files[0].read_text(encoding="utf-8")
+    sidecars = list(reports_dir.glob("*_verification.json"))
+    assert len(sidecars) == 1
+    assert json.loads(sidecars[0].read_text(encoding="utf-8"))[
+        "assessments"
+    ][0]["verdict"] == "supported"
 
 
 def test_report_command_rejects_unknown_evidence_without_writing_file(tmp_path):
@@ -95,7 +103,16 @@ def test_report_command_rejects_unknown_evidence_without_writing_file(tmp_path):
     evidence_path.write_text("", encoding="utf-8")
     claims_path = tmp_path / "claims.json"
     claims_path.write_text(
-        json.dumps([{"text": "Unsupported.", "evidence_ids": ["ev-missing"]}]),
+        json.dumps(
+            [
+                {
+                    "claim_id": "claim-1",
+                    "claim_type": "direct_quote",
+                    "text": "Unsupported.",
+                    "evidence_ids": ["ev-missing"],
+                }
+            ]
+        ),
         encoding="utf-8",
     )
 
@@ -121,7 +138,7 @@ def test_report_command_rejects_unknown_evidence_without_writing_file(tmp_path):
     )
 
     assert result.returncode == 2
-    assert "Unknown evidence_id: ev-missing" in result.stdout
+    assert "Missing evidence IDs: ev-missing" in result.stdout
     assert not (tmp_path / "reports").exists()
 
 

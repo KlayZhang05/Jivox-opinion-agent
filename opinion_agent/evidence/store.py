@@ -1,6 +1,7 @@
 import json
+from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 
 class EvidenceStore:
@@ -44,3 +45,23 @@ class EvidenceStore:
             if isinstance(evidence_id, str):
                 ids.add(evidence_id)
         return ids
+
+    def get_many(
+        self,
+        evidence_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        requested = list(evidence_ids)
+        if len(requested) != len(set(requested)):
+            raise ValueError("Duplicate evidence IDs are not allowed")
+
+        records_by_id = {
+            record["evidence_id"]: record for record in self.read_all()
+        }
+        missing = [
+            evidence_id
+            for evidence_id in requested
+            if evidence_id not in records_by_id
+        ]
+        if missing:
+            raise ValueError("Missing evidence IDs: " + ", ".join(missing))
+        return [deepcopy(records_by_id[evidence_id]) for evidence_id in requested]

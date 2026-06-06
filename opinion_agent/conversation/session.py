@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
-from opinion_agent.citations.verifier import verify_claim
+from opinion_agent.citations.verifier import verify_citations
 from opinion_agent.conversation.policy import (
     ConversationPolicy,
     validate_conversation_policy,
@@ -81,12 +81,12 @@ class ConversationSession:
             raise ValueError("evidence_ids must be a sequence of strings")
         normalized_ids = tuple(evidence_id.strip() for evidence_id in evidence_ids)
         if normalized_kind == "analysis" or normalized_ids:
-            result = verify_claim(
+            result = verify_citations(
                 {"text": content, "evidence_ids": list(normalized_ids)},
                 self.evidence_store,
             )
-            if not result["valid"]:
-                raise ValueError("; ".join(result["errors"]))
+            if not result.valid:
+                raise ValueError("; ".join(result.errors))
 
         return self._append_turn(
             role="assistant",
