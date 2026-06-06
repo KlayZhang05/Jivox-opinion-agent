@@ -43,6 +43,14 @@ class ToolCallRecord(BaseModel):
     arguments: dict = Field(default_factory=dict)
 
 
+class SubagentActionPlan(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    task_id: str = Field(min_length=1)
+    role_id: ResearchRoleId
+    tool_calls: tuple[ToolCallRecord, ...] = Field(min_length=1)
+
+
 class SubagentResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 

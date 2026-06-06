@@ -1,14 +1,57 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
-from opinion_agent.agents.models import ResearchPlan, ResearchTask
+from opinion_agent.agents.models import (
+    ResearchPlan,
+    ResearchTask,
+    SubagentActionPlan,
+    SubagentResult,
+    ToolCallRecord,
+)
 from opinion_agent.graph.research import (
     ResearchPlanLimitError,
     build_research_graph,
     fan_out_research_tasks,
 )
+from opinion_agent.tools.registry import ToolDefinition, ToolRegistry
+from opinion_agent.tools.search import SearchOutput, SearchResult
 from tests.fakes import BarrierStructuredModel
+
+
+class ResearchToolInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    query: str
+
+
+async def research_tool(arguments: ResearchToolInput) -> SearchOutput:
+    return SearchOutput(
+        provider="fixture",
+        query=arguments.query,
+        results=(
+            SearchResult(
+                title=f"Source for {arguments.query}",
+                url=f"https://example.test/{arguments.query.replace(' ', '-')}",
+                content=f"Evidence content for {arguments.query}",
+            ),
+        ),
+    )
+
+
+def tool_registry() -> ToolRegistry:
+    return ToolRegistry(
+        [
+            ToolDefinition(
+                tool_id=tool_id,
+                description=f"Fixture {tool_id}.",
+                input_model=ResearchToolInput,
+                handler=research_tool,
+            )
+            for tool_id in ("web_search", "search_evidence")
+        ]
+    )
 
 
 def two_task_plan() -> ResearchPlan:
@@ -47,7 +90,11 @@ def test_fan_out_returns_one_send_per_research_task():
 @pytest.mark.asyncio
 async def test_graph_runs_real_parallel_subagent_calls_and_reduces_results():
     model = BarrierStructuredModel(plan=two_task_plan())
-    graph = build_research_graph(model=model, max_parallel_subagents=4)
+    graph = build_research_graph(
+        model=model,
+        tool_registry=tool_registry(),
+        max_parallel_subagents=4,
+    )
 
     result = await graph.ainvoke({"topic": "Bounded event"})
 
@@ -58,6 +105,14 @@ async def test_graph_runs_real_parallel_subagent_calls_and_reduces_results():
         "task-2",
     }
     assert result["stage"] == "research_complete"
+    assert len(result["evidence_records"]) == 2
+    assert {
+        record["evidence_id"] for record in result["evidence_records"]
+    } == {
+        evidence_id
+        for item in result["subagent_results"]
+        for evidence_id in item.evidence_ids
+    }
     completed = [
         event
         for event in result["trace_events"]
@@ -73,7 +128,11 @@ async def test_failed_worker_is_recorded_without_losing_successful_worker():
         plan=two_task_plan(),
         failing_task_id="task-2",
     )
-    graph = build_research_graph(model=model, max_parallel_subagents=4)
+    graph = build_research_graph(
+        model=model,
+        tool_registry=tool_registry(),
+        max_parallel_subagents=4,
+    )
 
     result = await graph.ainvoke({"topic": "Bounded event"})
 
@@ -99,6 +158,7 @@ async def test_graph_rejects_plan_above_global_parallel_limit():
         model=BarrierStructuredModel(
             plan=ResearchPlan(topic="Bounded event", tasks=tasks)
         ),
+        tool_registry=tool_registry(),
         max_parallel_subagents=2,
     )
 
@@ -121,8 +181,65 @@ async def test_graph_rejects_plan_above_role_instance_limit():
         model=BarrierStructuredModel(
             plan=ResearchPlan(topic="Bounded event", tasks=tasks)
         ),
+        tool_registry=tool_registry(),
         max_parallel_subagents=4,
     )
 
     with pytest.raises(ResearchPlanLimitError, match="database_researcher"):
         await graph.ainvoke({"topic": "Bounded event"})
+
+
+class FabricatingModel:
+    async def ainvoke(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        output_schema,
+    ):
+        if output_schema is ResearchPlan:
+            return ResearchPlan(
+                topic="Bounded event",
+                tasks=(
+                    ResearchTask(
+                        task_id="task-1",
+                        role_id="query_agent",
+                        objective="Find a source.",
+                        rationale="Establish facts.",
+                    ),
+                ),
+            )
+        if output_schema is SubagentActionPlan:
+            return SubagentActionPlan(
+                task_id="task-1",
+                role_id="query_agent",
+                tool_calls=(
+                    ToolCallRecord(
+                        tool_id="web_search",
+                        arguments={"query": "bounded event"},
+                    ),
+                ),
+            )
+        if output_schema is SubagentResult:
+            return SubagentResult(
+                task_id="task-1",
+                role_id="query_agent",
+                summary="A fabricated citation.",
+                evidence_ids=("ev-does-not-exist",),
+            )
+        raise AssertionError(output_schema)
+
+
+@pytest.mark.asyncio
+async def test_graph_rejects_model_generated_evidence_ids():
+    graph = build_research_graph(
+        model=FabricatingModel(),
+        tool_registry=tool_registry(),
+        max_parallel_subagents=2,
+    )
+
+    result = await graph.ainvoke({"topic": "Bounded event"})
+
+    assert result["subagent_results"][0].evidence_ids == ()
+    assert "unavailable evidence IDs" in result["subagent_results"][0].errors[0]
+    assert any("ev-does-not-exist" in error for error in result["errors"])

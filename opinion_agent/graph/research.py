@@ -8,16 +8,19 @@ from langgraph.types import Send
 
 from opinion_agent.agents.models import (
     ResearchPlan,
+    SubagentActionPlan,
     SubagentResult,
 )
 from opinion_agent.agents.registry import get_role
 from opinion_agent.agents.skills import render_skill_bundle
+from opinion_agent.evidence.normalizer import normalize_tool_result
 from opinion_agent.graph.state import (
     ResearchState,
     SubagentInput,
     TraceEvent,
 )
 from opinion_agent.llm.protocols import ModelOutputError, StructuredModel
+from opinion_agent.tools.registry import ToolRegistry
 
 
 class ResearchPlanLimitError(ValueError):
@@ -44,6 +47,7 @@ def fan_out_research_tasks(state: ResearchState) -> list[Send]:
 def build_research_graph(
     *,
     model: StructuredModel,
+    tool_registry: ToolRegistry,
     max_parallel_subagents: int,
 ):
     if max_parallel_subagents < 1:
@@ -92,14 +96,79 @@ def build_research_graph(
             "permitted_tools": sorted(role.tool_ids),
         }
         try:
+            action_plan = await model.ainvoke(
+                system_prompt=(
+                    f"{role.system_prompt}\n\n"
+                    f"{render_skill_bundle(role.skill_ids)}\n\n"
+                    "Propose only the tool calls needed for this task. Use only "
+                    "the permitted tools listed in the task payload."
+                ),
+                user_prompt=json.dumps(
+                    prompt_payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                output_schema=SubagentActionPlan,
+            )
+            if (
+                action_plan.task_id != task.task_id
+                or action_plan.role_id != task.role_id
+            ):
+                raise ModelOutputError(
+                    "Subagent action identity does not match assigned task"
+                )
+            evidence_records = []
+            tool_payloads = []
+            trace_events = [
+                TraceEvent(
+                    event_type="subagent_started",
+                    role_id=task.role_id,
+                    task_id=task.task_id,
+                )
+            ]
+            for tool_call in action_plan.tool_calls:
+                tool_result = await tool_registry.invoke(
+                    role_id=task.role_id,
+                    tool_id=tool_call.tool_id,
+                    arguments=tool_call.arguments,
+                )
+                normalized = normalize_tool_result(
+                    tool_result,
+                    task_id=task.task_id,
+                    role_id=task.role_id,
+                )
+                evidence_records.extend(normalized)
+                tool_payloads.append(_jsonable(tool_result))
+                trace_events.append(
+                    TraceEvent(
+                        event_type="tool_call_completed",
+                        role_id=task.role_id,
+                        task_id=task.task_id,
+                        metadata={
+                            "tool_id": tool_call.tool_id,
+                            "ok": tool_result.ok,
+                            "evidence_count": len(normalized),
+                        },
+                    )
+                )
+
+            available_ids = tuple(
+                record["evidence_id"] for record in evidence_records
+            )
+            synthesis_payload = {
+                **prompt_payload,
+                "tool_results": tool_payloads,
+                "available_evidence_ids": available_ids,
+            }
             result = await model.ainvoke(
                 system_prompt=(
                     f"{role.system_prompt}\n\n"
                     f"{render_skill_bundle(role.skill_ids)}\n\n"
-                    "Use only the permitted tools listed in the task payload."
+                    "Summarize only the supplied tool results. Cite only IDs "
+                    "listed in available_evidence_ids."
                 ),
                 user_prompt=json.dumps(
-                    prompt_payload,
+                    synthesis_payload,
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
@@ -109,19 +178,39 @@ def build_research_graph(
                 raise ModelOutputError(
                     "Subagent result identity does not match assigned task"
                 )
+            unavailable_ids = sorted(set(result.evidence_ids) - set(available_ids))
+            if unavailable_ids:
+                raise ModelOutputError(
+                    "Subagent cited unavailable evidence IDs: "
+                    + ", ".join(unavailable_ids)
+                )
+            result = result.model_copy(
+                update={"tool_calls": action_plan.tool_calls}
+            )
+            trace_events.extend(
+                TraceEvent(
+                    event_type="evidence_normalized",
+                    role_id=task.role_id,
+                    task_id=task.task_id,
+                    metadata={"evidence_id": evidence_id},
+                )
+                for evidence_id in available_ids
+            )
+            trace_events.append(
+                TraceEvent(
+                    event_type="subagent_completed",
+                    role_id=task.role_id,
+                    task_id=task.task_id,
+                    metadata={
+                        "evidence_count": len(result.evidence_ids),
+                        "tool_call_count": len(result.tool_calls),
+                    },
+                )
+            )
             return {
                 "subagent_results": [result],
-                "trace_events": [
-                    TraceEvent(
-                        event_type="subagent_completed",
-                        role_id=task.role_id,
-                        task_id=task.task_id,
-                        metadata={
-                            "evidence_count": len(result.evidence_ids),
-                            "tool_call_count": len(result.tool_calls),
-                        },
-                    )
-                ],
+                "evidence_records": evidence_records,
+                "trace_events": trace_events,
             }
         except Exception as exc:
             message = str(exc)
@@ -169,6 +258,12 @@ def build_research_graph(
     builder.add_edge("run_subagent", "prepare_claims")
     builder.add_edge("prepare_claims", END)
     return builder.compile(name="parallel_evidence_research")
+
+
+def _jsonable(value):
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return value
 
 
 def _validate_plan_limits(

@@ -25,6 +25,7 @@ class ResearchState(TypedDict, total=False):
     topic: str
     plan: ResearchPlan
     subagent_results: Annotated[list[SubagentResult], operator.add]
+    evidence_records: Annotated[list[dict[str, Any]], operator.add]
     trace_events: Annotated[list[TraceEvent], operator.add]
     errors: Annotated[list[str], operator.add]
     stage: str
