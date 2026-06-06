@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -199,6 +200,7 @@ class ResearchService:
                 metadata={"instance_id": "citation_agent"},
             )
         )
+        model_started = time.perf_counter()
         bundle = await self.model.ainvoke(
             system_prompt=(
                 f"{role.system_prompt}\n\n"
@@ -217,7 +219,10 @@ class ResearchService:
             TraceEvent(
                 event_type="model_call_completed",
                 role_id=role.role_id,
-                metadata={"output_schema": "ClaimBundle"},
+                metadata={
+                    "output_schema": "ClaimBundle",
+                    "duration_ms": _elapsed_ms(model_started),
+                },
             )
         )
         return bundle
@@ -237,6 +242,7 @@ class ResearchService:
                 metadata={"instance_id": "report_writer"},
             )
         )
+        model_started = time.perf_counter()
         outline = await self.model.ainvoke(
             system_prompt=(
                 f"{role.system_prompt}\n\n"
@@ -261,7 +267,10 @@ class ResearchService:
             TraceEvent(
                 event_type="model_call_completed",
                 role_id=role.role_id,
-                metadata={"output_schema": "ReportOutline"},
+                metadata={
+                    "output_schema": "ReportOutline",
+                    "duration_ms": _elapsed_ms(model_started),
+                },
             )
         )
         return outline
@@ -296,3 +305,7 @@ class ResearchService:
             verification_path=verification_path,
             errors=tuple(errors),
         )
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 3)

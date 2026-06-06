@@ -1,76 +1,164 @@
 # Personal Opinion Agent
 
-Personal Opinion Agent is a Python project for personal public-opinion observation, with LangGraph-compatible runtime hooks planned around a deterministic core.
+LangGraph-based evidence-constrained public-opinion research agent with
+dynamic parallel subagents.
 
-The project goal is to provide a cleaner alternative to social-media scrolling. Social media is useful, but it is also noisy, sticky, and emotionally amplifying. This agent is designed around mental hygiene: calm briefings by default, intentional depth only when requested, and reports that are grounded in traceable evidence.
+The project is intentionally scoped as an inspectable agent-engineering
+portfolio project rather than a production monitoring platform. A Forum Host
+plans bounded research, launches temporary instances of predefined agent
+roles, executes role-authorized tools, stores normalized evidence, and emits a
+report only when every claim passes a fail-closed support gate.
 
-The system has three main product functions:
+## Architecture
 
-- scheduled low-noise briefings for social events and public-opinion signals
-- bounded, time-boxed conversations when deeper judgment is needed
-- evidence-grounded public-opinion reports with citation controls
-
-Current design and implementation plan:
-
-- `docs/superpowers/specs/2026-06-05-personal-opinion-agent-design.md`
-- `docs/superpowers/plans/2026-06-05-personal-opinion-agent-implementation.md`
-
-## Repository Scope
-
-This repository is intentionally separate from `D:\NLPIR`.
-
-Only code, specs, tests, examples, and documentation for the personal opinion agent should be committed here. Existing research projects, logs, API keys, exported conversations, generated reports, and unrelated workspace files should stay outside this repository.
-
-## Suggested GitHub Repository Name
-
-Use `personal-opinion-agent` rather than `NLPIR`.
-
-## Current Status
-
-First runnable slice available:
-
-- deterministic sample briefing
-- JSONL evidence store
-- citation verification
-- bounded conversation session and transcript export
-- LangGraph-compatible runtime skeleton
-
-## Run Locally
-
-Run tests:
-
-```powershell
-python -m pytest tests -v
+```text
+research topic
+  -> Forum Host: structured ResearchPlan
+  -> LangGraph Send fan-out
+       -> query_agent instance A -> authorized tools -> evidence
+       -> query_agent instance B -> authorized tools -> evidence
+       -> other registered research roles when adapters are available
+  -> reducer fan-in
+  -> Citation Agent: atomic ClaimInput records
+  -> citation existence + claim support verification
+  -> Report Writer: title and verified-claim ordering only
+  -> Markdown report + verification JSON + evidence JSONL + trace JSON
 ```
 
-Generate a sample low-stimulation briefing:
+The concurrency test uses an `asyncio.Event` barrier to prove that two worker
+LLM calls overlap. It does not infer concurrency from elapsed time.
+
+## Fixed Roles
+
+Runtime role creation is prohibited. The immutable registry contains:
+
+| Role | Responsibility | Current runtime status |
+|---|---|---|
+| `forum_host` | Plan bounded research and select registered roles | Active |
+| `query_agent` | Retrieve attributable web material | Active |
+| `database_researcher` | Retrieve prior local evidence | Contract defined |
+| `multimedia_researcher` | Inspect bounded media evidence | Contract defined |
+| `citation_agent` | Atomize claims and audit support | Active |
+| `report_writer` | Order verified claims without adding new claims | Active |
+| `tikhub_researcher` | Collect bounded social records through TikHub | Contract defined |
+
+Each role binds a system prompt, predefined Skills, a Tool Set whitelist,
+structured input/output schemas, and an instance limit. The Forum Host can
+choose among registered research roles and create multiple instances, but
+cannot invent a role or modify its permissions.
+
+The runnable real adapter currently exposes `web_search`. Database,
+multimedia, and TikHub tool adapters are explicit extension points, not
+simulated production integrations.
+
+## Evidence Controls
+
+The worker path is deliberately two-stage:
+
+1. The LLM proposes structured tool calls.
+2. Deterministic code enforces the role Tool Set and executes tools.
+3. Tool output receives stable evidence IDs.
+4. The LLM summarizes only those results and may cite only generated IDs.
+
+A model-generated or unknown evidence ID is rejected.
+
+Reports use a separate claim support gate:
+
+- `ClaimInput` declares `claim_type`, optional `scope`, and evidence IDs.
+- `ExactQuoteEvaluator` supports only `direct_quote`.
+- `factual_statement`, `opinion_summary`, and `analytic_inference` return
+  `indeterminate` until a semantic evaluator is configured.
+- Supporting spans are checked against persisted evidence text.
+- Any malformed, missing, unsupported, contradicted, or indeterminate claim
+  prevents all report artifacts.
+
+This proves source-span support within declared scope. It does not prove that a
+source is truthful or that a sample represents the wider population.
+
+## Run
+
+Requires Python 3.11 or newer.
 
 ```powershell
-python -m opinion_agent brief --plan examples\briefing_plan.example.json
+python -m pip install -e ".[test]"
+python -m pytest tests -q
 ```
 
-The generated Markdown file is written under `output/briefings/`.
-
-Generate a citation-gated report from sample evidence and claims:
+Run the complete deterministic pipeline without credentials:
 
 ```powershell
-python -m opinion_agent report --topic "Personal public-opinion observation" --evidence examples\sample_evidence.jsonl --claims examples\report_claims.example.json
+python -m opinion_agent research `
+  --topic "A bounded social event" `
+  --adapter fake `
+  --output-dir output\research
 ```
 
-The generated Markdown file is written under `output/reports/`. Claims that cite unknown evidence IDs are rejected before a report is written.
-
-Run the sample bounded conversation:
+Run with an OpenAI-compatible model and Anspire-compatible search endpoint:
 
 ```powershell
-python -m opinion_agent conversation --policy examples\conversation_policy.example.json --turns examples\conversation_turns.example.json --evidence examples\sample_evidence.jsonl
+Copy-Item .env.example .env
+# Fill generic LLM_* and SEARCH_* values locally.
+python -m opinion_agent research `
+  --topic "A bounded social event" `
+  --output-dir output\research
 ```
 
-The generated transcript is written under `output/conversations/`. The session enforces:
+Each run creates:
 
-- an exact topic boundary
-- a fixed duration
-- configurable dialogue principles and allowed tools
-- evidence validation for every cited assistant turn
-- explicit question-to-user turns
+```text
+output/research/run-<id>/
+  evidence.jsonl
+  report.md
+  report_verification.json
+  trace.json
+```
 
-The JSON turns file is a deterministic adapter for the current development slice. Future LangGraph and LLM nodes will call the same conversation session API instead of bypassing these constraints.
+`trace.json` records UTC event times, model/tool durations, role instances,
+fan-out/fan-in, evidence IDs, verification verdicts, and report completion. It
+omits API keys, prompts, authorization headers, and hidden reasoning.
+
+## Repository Map
+
+```text
+opinion_agent/
+  agents/       fixed roles, Skills, and structured contracts
+  graph/        LangGraph StateGraph, Send fan-out, reducers
+  tools/        registry, permission gate, search adapter
+  evidence/     stable normalization and append-only JSONL store
+  citations/    claim contracts and support evaluators
+  research/     end-to-end orchestration and fake/real factories
+  reports/      fail-closed Markdown and verification sidecar
+  tracing/      sanitized atomic JSON trace
+tests/          deterministic unit, concurrency, and end-to-end tests
+```
+
+The approved active scope is documented in
+`docs/superpowers/specs/2026-06-06-evidence-research-agent-resume-scope-design.md`.
+
+## Design Trade-offs
+
+- One shared model profile keeps the project focused on orchestration;
+  behavioral specialization comes from role prompts, Skills, Tool Sets, and
+  schemas.
+- JSONL is sufficient for auditable local evidence and avoids adding a
+  database that does not strengthen the portfolio story.
+- Exact quote verification is narrow but reproducible. The evaluator protocol
+  leaves room for a later LLM or NLI semantic verifier without weakening the
+  current gate.
+- Source credibility, representativeness, scheduling, a frontend, production
+  multimedia ingestion, and full TikHub ingestion are out of scope.
+
+## Resume Summary
+
+- Built a LangGraph public-opinion research agent using structured planning,
+  dynamic `Send` fan-out, reducer-based fan-in, and real parallel LLM
+  subagent calls selected from an immutable role registry.
+- Designed role-scoped Skills and Tool Sets, deterministic evidence identity,
+  fail-closed claim support verification, and replayable sanitized traces for
+  auditable report generation.
+
+## Historical Prototypes
+
+The repository retains earlier deterministic `brief`, `report`, and
+`conversation` commands for experimentation. They are not part of the active
+resume scope; `research` is the primary workflow.

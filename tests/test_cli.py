@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import json
+import os
 
 
 def test_brief_command_writes_markdown_under_output_briefings(tmp_path):
@@ -256,3 +257,80 @@ def test_conversation_command_rejects_invalid_turn_json_types(tmp_path):
     assert result.returncode == 2
     assert "conversation turn content must be a string" in result.stdout
     assert not (tmp_path / "conversations").exists()
+
+
+def test_research_command_runs_full_fake_pipeline(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "research",
+            "--topic",
+            "Bounded event",
+            "--adapter",
+            "fake",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    run_dirs = [path for path in tmp_path.iterdir() if path.is_dir()]
+    assert len(run_dirs) == 1
+    run_dir = run_dirs[0]
+    assert (run_dir / "report.md").exists()
+    assert (run_dir / "report_verification.json").exists()
+    assert (run_dir / "evidence.jsonl").exists()
+    assert (run_dir / "trace.json").exists()
+    trace = json.loads((run_dir / "trace.json").read_text(encoding="utf-8"))
+    assert trace["status"] == "completed"
+    completed_workers = [
+        event
+        for event in trace["events"]
+        if event["event_type"] == "subagent_completed"
+    ]
+    assert len(completed_workers) == 2
+
+
+def test_research_command_reports_missing_real_settings(tmp_path):
+    missing_env = tmp_path / "missing.env"
+    environment = os.environ.copy()
+    for name in (
+        "LLM_API_KEY",
+        "LLM_BASE_URL",
+        "LLM_MODEL_NAME",
+        "SEARCH_PROVIDER",
+        "SEARCH_API_KEY",
+        "SEARCH_BASE_URL",
+    ):
+        environment.pop(name, None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "research",
+            "--topic",
+            "Bounded event",
+            "--adapter",
+            "real",
+            "--env-file",
+            str(missing_env),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+        env=environment,
+    )
+
+    assert result.returncode == 2
+    assert "Missing required runtime settings" in result.stdout
+    assert not (tmp_path / "output").exists()

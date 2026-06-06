@@ -168,6 +168,17 @@ async def test_service_writes_auditable_end_to_end_artifacts(tmp_path):
         "claim_verification_completed",
         "report_written",
     } <= event_types
+    assert all(event["occurred_at"] for event in trace["events"])
+    timed_events = [
+        event
+        for event in trace["events"]
+        if event["event_type"] in {
+            "model_call_completed",
+            "tool_call_completed",
+        }
+    ]
+    assert timed_events
+    assert all(event["metadata"]["duration_ms"] >= 0 for event in timed_events)
     assert ClaimBundle in model.schemas
     assert ReportOutline in model.schemas
     serialized_trace = json.dumps(trace).casefold()

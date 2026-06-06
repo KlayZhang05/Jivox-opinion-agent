@@ -1,7 +1,7 @@
 [project]
 name = "opinion-agent"
 version = "0.1.0"
-description = "Local personal public-opinion observation agent."
+description = "LangGraph evidence-constrained public-opinion research agent."
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27,<1",
@@ -16,6 +16,9 @@ test = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
 ]
+
+[project.scripts]
+opinion-agent = "opinion_agent.cli:main"
 
 [build-system]
 requires = ["setuptools>=69"]

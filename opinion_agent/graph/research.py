@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 
 from langgraph.graph import END, START, StateGraph
@@ -58,6 +59,7 @@ def build_research_graph(
         if not topic:
             raise ValueError("Research topic must not be empty")
         role = get_role("forum_host")
+        model_started = time.perf_counter()
         plan = await model.ainvoke(
             system_prompt=(
                 f"{role.system_prompt}\n\n"
@@ -85,7 +87,10 @@ def build_research_graph(
                 TraceEvent(
                     event_type="model_call_completed",
                     role_id="forum_host",
-                    metadata={"output_schema": "ResearchPlan"},
+                    metadata={
+                        "output_schema": "ResearchPlan",
+                        "duration_ms": _elapsed_ms(model_started),
+                    },
                 ),
                 TraceEvent(
                     event_type="research_plan_created",
@@ -106,6 +111,7 @@ def build_research_graph(
             "permitted_tools": sorted(role.tool_ids),
         }
         try:
+            action_started = time.perf_counter()
             action_plan = await model.ainvoke(
                 system_prompt=(
                     f"{role.system_prompt}\n\n"
@@ -140,10 +146,14 @@ def build_research_graph(
                     event_type="model_call_completed",
                     role_id=task.role_id,
                     task_id=task.task_id,
-                    metadata={"output_schema": "SubagentActionPlan"},
+                    metadata={
+                        "output_schema": "SubagentActionPlan",
+                        "duration_ms": _elapsed_ms(action_started),
+                    },
                 )
             ]
             for tool_call in action_plan.tool_calls:
+                tool_started = time.perf_counter()
                 tool_result = await tool_registry.invoke(
                     role_id=task.role_id,
                     tool_id=tool_call.tool_id,
@@ -165,6 +175,7 @@ def build_research_graph(
                             "tool_id": tool_call.tool_id,
                             "ok": tool_result.ok,
                             "evidence_count": len(normalized),
+                            "duration_ms": _elapsed_ms(tool_started),
                         },
                     )
                 )
@@ -177,6 +188,7 @@ def build_research_graph(
                 "tool_results": tool_payloads,
                 "available_evidence_ids": available_ids,
             }
+            synthesis_started = time.perf_counter()
             result = await model.ainvoke(
                 system_prompt=(
                     f"{role.system_prompt}\n\n"
@@ -196,7 +208,10 @@ def build_research_graph(
                     event_type="model_call_completed",
                     role_id=task.role_id,
                     task_id=task.task_id,
-                    metadata={"output_schema": "SubagentResult"},
+                    metadata={
+                        "output_schema": "SubagentResult",
+                        "duration_ms": _elapsed_ms(synthesis_started),
+                    },
                 )
             )
             if result.task_id != task.task_id or result.role_id != task.role_id:
@@ -289,6 +304,10 @@ def _jsonable(value):
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
     return value
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 3)
 
 
 def _validate_plan_limits(

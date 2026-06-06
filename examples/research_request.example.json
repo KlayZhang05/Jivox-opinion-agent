@@ -1,0 +1,5 @@
+{
+  "topic": "Sample bounded event",
+  "adapter": "fake",
+  "output_dir": "output/research"
+}

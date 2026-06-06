@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,6 +13,11 @@ from .config import ConfigError, load_briefing_plan
 from .conversation import ConversationPolicy, ConversationSession
 from .evidence.store import EvidenceStore
 from .reports.generator import write_report_artifacts
+from .research.factory import (
+    build_fake_research_service,
+    build_real_research_service,
+)
+from .settings import SettingsError, load_settings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,6 +52,27 @@ def main(argv: list[str] | None = None) -> int:
         default="output",
         help="Base output directory. Transcripts are written under conversations.",
     )
+    research = subparsers.add_parser(
+        "research",
+        help="Run the parallel evidence-constrained research agent",
+    )
+    research.add_argument("--topic", required=True, help="Bounded research topic")
+    research.add_argument(
+        "--adapter",
+        choices=("real", "fake"),
+        default="real",
+        help="Use real configured providers or deterministic local fixtures.",
+    )
+    research.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional .env path for the real adapter.",
+    )
+    research.add_argument(
+        "--output-dir",
+        default="output/research",
+        help="Directory under which a run-specific artifact folder is created.",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "brief":
@@ -58,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
             args.turns,
             args.evidence,
             args.output_dir,
+        )
+    if args.command == "research":
+        return _research(
+            topic=args.topic,
+            adapter=args.adapter,
+            env_file=args.env_file,
+            output_dir=args.output_dir,
         )
     return 2
 
@@ -194,3 +228,33 @@ def _conversation(
     output_path.write_text(session.to_markdown(), encoding="utf-8")
     print(output_path)
     return 0
+
+
+def _research(
+    *,
+    topic: str,
+    adapter: str,
+    env_file: str | None,
+    output_dir: str,
+) -> int:
+    try:
+        if adapter == "fake":
+            service = build_fake_research_service()
+        else:
+            service = build_real_research_service(load_settings(env_file))
+        result = asyncio.run(service.run(topic, output_dir))
+    except (OSError, ValueError, SettingsError) as exc:
+        print(f"Research error: {exc}")
+        return 2
+
+    print(f"Run: {result.run_id}")
+    print(f"Status: {result.status}")
+    print(f"Evidence: {result.evidence_path}")
+    print(f"Trace: {result.trace_path}")
+    if result.report_path is not None:
+        print(f"Report: {result.report_path}")
+    if result.verification_path is not None:
+        print(f"Verification: {result.verification_path}")
+    for error in result.errors:
+        print(f"Error: {error}")
+    return 0 if result.status == "completed" else 2
