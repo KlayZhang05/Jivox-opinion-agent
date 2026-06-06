@@ -27,4 +27,4 @@ env/
 Thumbs.db
 .idea/
 .vscode/
-
+.worktrees/
