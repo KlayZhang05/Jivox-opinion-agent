@@ -123,3 +123,119 @@ def test_report_command_rejects_unknown_evidence_without_writing_file(tmp_path):
     assert result.returncode == 2
     assert "Unknown evidence_id: ev-missing" in result.stdout
     assert not (tmp_path / "reports").exists()
+
+
+def test_conversation_command_writes_bounded_transcript(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "conversation",
+            "--policy",
+            "examples/conversation_policy.example.json",
+            "--turns",
+            "examples/conversation_turns.example.json",
+            "--evidence",
+            "examples/sample_evidence.jsonl",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    transcripts = list((tmp_path / "conversations").glob("*.md"))
+    assert len(transcripts) == 1
+    markdown = transcripts[0].read_text(encoding="utf-8")
+    assert "# Bounded Conversation: Personal public-opinion observation" in markdown
+    assert "Evidence: sample-001" in markdown
+    assert "Question to user: yes" in markdown
+
+
+def test_conversation_command_rejects_invalid_policy_json_types(tmp_path):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "topic_boundary": None,
+                "duration_minutes": 20.5,
+                "principles": "stay calm",
+                "allowed_tools": ["evidence_store"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    turns_path = tmp_path / "turns.json"
+    turns_path.write_text("[]", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "conversation",
+            "--policy",
+            str(policy_path),
+            "--turns",
+            str(turns_path),
+            "--evidence",
+            "examples/sample_evidence.jsonl",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "topic_boundary must be a string" in result.stdout
+    assert not (tmp_path / "conversations").exists()
+
+
+def test_conversation_command_rejects_invalid_turn_json_types(tmp_path):
+    turns_path = tmp_path / "turns.json"
+    turns_path.write_text(
+        json.dumps(
+            [
+                {
+                    "role": "assistant",
+                    "topic": "Personal public-opinion observation",
+                    "content": None,
+                    "kind": "analysis",
+                    "evidence_ids": "sample-001",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "opinion_agent",
+            "conversation",
+            "--policy",
+            "examples/conversation_policy.example.json",
+            "--turns",
+            str(turns_path),
+            "--evidence",
+            "examples/sample_evidence.jsonl",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        cwd=".",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "conversation turn content must be a string" in result.stdout
+    assert not (tmp_path / "conversations").exists()

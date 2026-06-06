@@ -1,0 +1,24 @@
+[
+  {
+    "role": "user",
+    "topic": "Personal public-opinion observation",
+    "content": "What does the current sample evidence actually support?"
+  },
+  {
+    "role": "assistant",
+    "topic": "Personal public-opinion observation",
+    "kind": "analysis",
+    "content": "The sample evidence supports measured attention and community-oriented information sharing, not a clear escalation.",
+    "evidence_ids": [
+      "sample-001",
+      "sample-002",
+      "sample-003"
+    ]
+  },
+  {
+    "role": "assistant",
+    "topic": "Personal public-opinion observation",
+    "kind": "question",
+    "content": "Which uncertainty would you like to examine more critically?"
+  }
+]

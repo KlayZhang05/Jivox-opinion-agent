@@ -32,7 +32,7 @@ First runnable slice available:
 - deterministic sample briefing
 - JSONL evidence store
 - citation verification
-- bounded conversation policy
+- bounded conversation session and transcript export
 - LangGraph-compatible runtime skeleton
 
 ## Run Locally
@@ -58,3 +58,19 @@ python -m opinion_agent report --topic "Personal public-opinion observation" --e
 ```
 
 The generated Markdown file is written under `output/reports/`. Claims that cite unknown evidence IDs are rejected before a report is written.
+
+Run the sample bounded conversation:
+
+```powershell
+python -m opinion_agent conversation --policy examples\conversation_policy.example.json --turns examples\conversation_turns.example.json --evidence examples\sample_evidence.jsonl
+```
+
+The generated transcript is written under `output/conversations/`. The session enforces:
+
+- an exact topic boundary
+- a fixed duration
+- configurable dialogue principles and allowed tools
+- evidence validation for every cited assistant turn
+- explicit question-to-user turns
+
+The JSON turns file is a deterministic adapter for the current development slice. Future LangGraph and LLM nodes will call the same conversation session API instead of bypassing these constraints.

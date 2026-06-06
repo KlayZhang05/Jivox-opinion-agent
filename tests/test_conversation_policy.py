@@ -66,3 +66,38 @@ def test_rejects_missing_principles_or_allowed_tools():
                 allowed_tools=(),
             )
         )
+
+
+def test_rejects_string_instead_of_principle_or_tool_lists():
+    with pytest.raises(ValueError, match="principles must be a sequence"):
+        validate_conversation_policy(
+            ConversationPolicy(
+                topic_boundary="Stay on the event.",
+                duration_minutes=15,
+                principles="be concise",
+                allowed_tools=("evidence_store",),
+            )
+        )
+
+    with pytest.raises(ValueError, match="allowed_tools must be a sequence"):
+        validate_conversation_policy(
+            ConversationPolicy(
+                topic_boundary="Stay on the event.",
+                duration_minutes=15,
+                principles=("be concise",),
+                allowed_tools="evidence_store",
+            )
+        )
+
+
+@pytest.mark.parametrize("duration", [15.5, True])
+def test_rejects_non_integer_duration(duration):
+    with pytest.raises(ValueError, match="duration_minutes must be an integer"):
+        validate_conversation_policy(
+            ConversationPolicy(
+                topic_boundary="Stay on the event.",
+                duration_minutes=duration,
+                principles=("be concise",),
+                allowed_tools=("evidence_store",),
+            )
+        )

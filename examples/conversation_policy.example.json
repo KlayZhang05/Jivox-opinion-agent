@@ -1,0 +1,14 @@
+{
+  "topic_boundary": "Personal public-opinion observation",
+  "duration_minutes": 20,
+  "principles": [
+    "keep the tone calm and non-alarmist",
+    "challenge weak assumptions",
+    "separate sourced facts from interpretation"
+  ],
+  "allowed_tools": [
+    "evidence_store",
+    "citation_verifier",
+    "web_search"
+  ]
+}

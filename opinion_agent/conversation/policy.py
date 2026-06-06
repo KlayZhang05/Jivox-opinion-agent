@@ -13,10 +13,23 @@ class ConversationPolicy:
 
 
 def validate_conversation_policy(policy: ConversationPolicy) -> ConversationPolicy:
+    if not isinstance(policy.topic_boundary, str):
+        raise ValueError("topic_boundary must be a string")
     if not policy.topic_boundary.strip():
         raise ValueError("topic_boundary is required")
+    if type(policy.duration_minutes) is not int:
+        raise ValueError("duration_minutes must be an integer")
     if policy.duration_minutes <= 0:
         raise ValueError("duration_minutes must be greater than 0")
+    if isinstance(policy.principles, (str, bytes)):
+        raise ValueError("principles must be a sequence of strings")
+    if isinstance(policy.allowed_tools, (str, bytes)):
+        raise ValueError("allowed_tools must be a sequence of strings")
+    if any(not isinstance(item, str) for item in policy.principles):
+        raise ValueError("principles must be a sequence of strings")
+    if any(not isinstance(item, str) for item in policy.allowed_tools):
+        raise ValueError("allowed_tools must be a sequence of strings")
+
     principles = tuple(item.strip() for item in policy.principles if item.strip())
     allowed_tools = tuple(item.strip() for item in policy.allowed_tools if item.strip())
     if not principles:
