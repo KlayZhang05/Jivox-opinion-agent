@@ -5,12 +5,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-WorkerRoleId = Literal[
+ResearchRoleId = Literal[
     "query_agent",
     "database_researcher",
     "multimedia_researcher",
-    "citation_agent",
-    "report_writer",
     "tikhub_researcher",
 ]
 
@@ -19,7 +17,7 @@ class ResearchTask(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     task_id: str = Field(min_length=1)
-    role_id: WorkerRoleId
+    role_id: ResearchRoleId
     objective: str = Field(min_length=1)
     rationale: str = Field(min_length=1)
 
@@ -49,7 +47,7 @@ class SubagentResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     task_id: str = Field(min_length=1)
-    role_id: WorkerRoleId
+    role_id: ResearchRoleId
     summary: str = Field(min_length=1)
     evidence_ids: tuple[str, ...] = ()
     tool_calls: tuple[ToolCallRecord, ...] = ()

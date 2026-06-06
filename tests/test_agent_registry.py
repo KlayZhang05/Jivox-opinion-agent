@@ -103,3 +103,11 @@ def test_research_task_accepts_only_registered_worker_roles():
             objective="Do unsupported work.",
             rationale="This must not create a role.",
         )
+
+    with pytest.raises(ValidationError):
+        ResearchTask(
+            task_id="task-2",
+            role_id="report_writer",
+            objective="Write before evidence collection.",
+            rationale="Pipeline roles are not research fan-out workers.",
+        )
