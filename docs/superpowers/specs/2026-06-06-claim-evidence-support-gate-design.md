@@ -1,7 +1,7 @@
 # Claim-Evidence Support Gate Design
 
 Date: 2026-06-06
-Status: Approved for implementation planning
+Status: Approved with requested changes incorporated
 
 ## Purpose
 
@@ -24,9 +24,10 @@ This slice includes:
 - explicit separation between citation validation and semantic support
   validation;
 - atomic report claims with stable claim IDs;
+- explicit claim types and optional scope metadata;
 - structured support assessments;
 - exact verification of quoted evidence spans;
-- a strict offline evaluator for direct evidence claims;
+- an exact-quote evaluator for direct source spans;
 - a protocol for later LLM or local NLI evaluators;
 - fail-closed report generation;
 - a machine-readable verification sidecar;
@@ -64,26 +65,63 @@ Every report claim must use this shape:
 ```json
 {
   "claim_id": "claim-001",
+  "claim_type": "direct_quote",
   "text": "The city published a limited route adjustment.",
+  "scope": {
+    "platform": "city_website",
+    "time_window": {
+      "start": "2026-06-06T00:00:00Z",
+      "end": "2026-06-06T23:59:59Z"
+    },
+    "sample": "single official notice"
+  },
   "evidence_ids": ["ev-001"]
 }
 ```
 
+Initial claim types:
+
+- `direct_quote`: `text` is a verbatim span from cited evidence.
+- `factual_statement`: a fact expressed directly or by faithful paraphrase.
+- `opinion_summary`: a bounded synthesis of opinions in a declared sample.
+- `analytic_inference`: an interpretation or conclusion derived from evidence.
+
 Rules:
 
 - `claim_id` is a non-empty string and unique within a report.
-- `text` is a non-empty, atomic factual or analytical statement.
+- `claim_type` is one of the four initial values.
+- `text` is a non-empty, atomic statement.
+- For `direct_quote`, `text` is the exact source span, not prose surrounding or
+  interpreting the quotation.
+- `scope` is optional. When present, it is an object containing any of:
+  - `platform`: a non-empty string naming the bounded platform or source domain;
+  - `time_window`: an object with optional ISO-8601 `start` and `end` strings;
+  - `sample`: a non-empty string describing the evidence sample represented.
 - `evidence_ids` is a non-empty list of unique, non-empty strings.
 - One claim must not combine independently verifiable assertions.
 - A report input with duplicate claim IDs is invalid.
+- Scope metadata is preserved through verification and report artifacts. The
+  first implementation validates its shape but does not infer or expand it.
 
 The report writer or future claim-decomposition node owns claim atomization.
 The support gate does not split prose because silent splitting would make audit
 identity unstable.
 
+The first implementation supports only `direct_quote`. The exact-quote
+evaluator returns `indeterminate` for `factual_statement`, `opinion_summary`,
+and `analytic_inference`. A semantic evaluator is required to assess those
+types.
+
 ## Support Assessment Contract
 
 ```python
+ClaimType = Literal[
+    "direct_quote",
+    "factual_statement",
+    "opinion_summary",
+    "analytic_inference",
+]
+
 SupportVerdict = Literal[
     "supported",
     "unsupported",
@@ -101,8 +139,10 @@ class EvidenceSpan:
 @dataclass(frozen=True)
 class SupportAssessment:
     claim_id: str
+    claim_type: ClaimType
     verdict: SupportVerdict
     reason: str
+    scope: Mapping[str, Any] | None = None
     supporting_spans: tuple[EvidenceSpan, ...] = ()
     contradicting_spans: tuple[EvidenceSpan, ...] = ()
     evaluator: str = ""
@@ -111,10 +151,16 @@ class SupportAssessment:
 
 Verdict meanings:
 
-- `supported`: the cited evidence directly supports the complete claim.
+- `supported`: the cited evidence supports the claim within its declared
+  `claim_type` and `scope`.
 - `unsupported`: the evidence is relevant but insufficient for the claim.
 - `contradicted`: at least one cited source directly conflicts with the claim.
 - `indeterminate`: the evaluator cannot make a reliable decision.
+
+`supported` does not expand the claim's scope. For example, support for a
+statement scoped to one platform and one time window is not support for all
+platforms or a longer period. Preserving scope is mandatory even when the first
+implementation cannot reason about it.
 
 Uncalibrated numeric confidence must not control release in this slice.
 
@@ -136,13 +182,18 @@ store.
 
 Two evaluator modes are required by the architecture:
 
-### Strict Offline Evaluator
+### Exact Quote Evaluator
 
-The first runnable implementation provides a deterministic evaluator for
-direct evidence claims. It returns `supported` only when the complete normalized
-claim is present as a verifiable span in cited evidence. Paraphrases,
-aggregations, inferred absence, trend language, and population-level claims
-return `indeterminate`.
+The first runnable implementation provides a deterministic
+`ExactQuoteEvaluator`. It returns `supported` only when:
+
+- `claim_type` is `direct_quote`; and
+- the complete claim `text` occurs as an exact span in cited evidence content.
+
+For other claim types it returns `indeterminate`, even when words overlap.
+Paraphrases, aggregations, inferred absence, trend language, opinion summaries,
+analytic inferences, and population-level claims therefore require a configured
+semantic evaluator.
 
 This mode is intentionally narrow. It provides a zero-cost, reproducible
 baseline without pretending that keyword overlap is semantic verification.
@@ -183,15 +234,17 @@ citation-only validation for semantic verification.
 2. Resolve all cited evidence records in requested order.
 3. Reject missing evidence without calling the evaluator.
 4. Call the evaluator with the claim and resolved evidence bundle.
-5. Validate the assessment structure and matching `claim_id`.
-6. Ensure every assessment evidence ID belongs to the claim's cited IDs.
-7. Ensure every quoted span occurs in the corresponding evidence content.
-8. Enforce verdict invariants:
+5. Validate the assessment structure and matching `claim_id`, `claim_type`, and
+   `scope`.
+6. Preserve the claim's declared `claim_type` and `scope`.
+7. Ensure every assessment evidence ID belongs to the claim's cited IDs.
+8. Ensure every quoted span occurs in the corresponding evidence content.
+9. Enforce verdict invariants:
    - `supported` requires at least one valid supporting span;
    - `supported` cannot include contradicting spans;
    - `contradicted` requires at least one valid contradicting span;
    - all non-`supported` verdicts reject the claim.
-9. Return structured errors and the assessment.
+10. Return structured errors and the assessment.
 
 Quoted-span matching normalizes line endings only. It does not collapse
 whitespace, rewrite punctuation, translate text, or use fuzzy matching.
@@ -217,9 +270,10 @@ The store remains append-only JSONL in this slice.
 
 Reports use `verify_claim_support`; they never call citation-only verification.
 The core report-generation API requires a `SupportEvaluator` argument with no
-implicit default. The CLI explicitly constructs the strict offline evaluator
+implicit default. The CLI explicitly constructs the exact-quote evaluator
 for this slice, so the sample command remains runnable but cannot bypass the
-support gate. The sample claim is updated to a directly verifiable statement.
+support gate. The sample claim is updated to a `direct_quote` with a directly
+verifiable source span.
 
 The report pipeline is:
 
@@ -250,6 +304,7 @@ The sidecar `<report-name>_verification.json` stores:
 - schema version;
 - topic;
 - claim inputs;
+- claim types and declared scope metadata;
 - validated assessments;
 - evaluator identity and version.
 
@@ -274,6 +329,7 @@ For this slice:
 The system fails closed for:
 
 - malformed claim input;
+- unknown claim types or malformed scope metadata;
 - duplicate claim IDs;
 - missing or duplicate evidence IDs;
 - missing evidence records;
@@ -310,7 +366,10 @@ Tests must cover:
 - valid citation-only verification;
 - unknown evidence rejection before evaluator invocation;
 - ordered `get_many` retrieval and missing-ID errors;
-- direct supported claim acceptance;
+- exact `direct_quote` acceptance;
+- non-direct claim types returning `indeterminate` under the exact-quote
+  evaluator;
+- claim scope validation and preservation;
 - unrelated evidence rejection;
 - contradicted claim rejection;
 - indeterminate claim rejection;
@@ -335,10 +394,11 @@ This implementation slice is complete when:
 3. Only `supported` assessments with verified source spans enter reports.
 4. Unknown, unsupported, contradicted, indeterminate, malformed, or failed
    assessments prevent all report artifacts.
-5. The strict offline evaluator supports reproducible direct-evidence reports.
+5. The exact-quote evaluator supports reproducible `direct_quote` reports and
+   returns `indeterminate` for all other claim types.
 6. A provider-neutral evaluator protocol exists for later LLM or NLI adapters.
-7. Successful reports include Markdown and a machine-readable verification
-   sidecar.
+7. Successful reports preserve claim type and scope in Markdown and a
+   machine-readable verification sidecar.
 8. Existing briefing and bounded-conversation behavior remains operational.
 9. The full test suite and CLI smoke tests pass.
 
