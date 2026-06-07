@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from opinion_agent.citations.evaluators import ExactQuoteEvaluator
 from opinion_agent.citations.models import (
     ClaimInput,
@@ -143,3 +146,11 @@ def test_scope_validates_and_preserves_declared_fields():
     assert scope.platform == "forum"
     assert scope.time_window.start == "2026-06-01T00:00:00Z"
     assert scope.sample == "20 public posts"
+
+
+def test_claim_contract_rejects_markdown_injection_in_identifiers():
+    with pytest.raises(ValidationError):
+        direct_quote_claim(claim_id="claim-1\n## Injected")
+
+    with pytest.raises(ValidationError):
+        direct_quote_claim(evidence_ids=["ev-1\n## Injected"])

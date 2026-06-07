@@ -103,9 +103,11 @@ Rules:
 - Scope metadata is preserved through verification and report artifacts. The
   first implementation validates its shape but does not infer or expand it.
 
-The report writer or future claim-decomposition node owns claim atomization.
-The support gate does not split prose because silent splitting would make audit
-identity unstable.
+For the runnable exact-quote path, deterministic code generates bounded source
+span candidates and the Citation Agent selects one candidate ID. Application
+code materializes the corresponding atomic `ClaimInput`; the model never
+authors quote text or evidence IDs. The support gate does not split prose
+because silent splitting would make audit identity unstable.
 
 The first implementation supports only `direct_quote`. The exact-quote
 evaluator returns `indeterminate` for `factual_statement`, `opinion_summary`,

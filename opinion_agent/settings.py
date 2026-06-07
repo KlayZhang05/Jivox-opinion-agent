@@ -45,7 +45,6 @@ class RuntimeLimits(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     max_parallel_subagents: int
-    max_research_rounds: int
     llm_request_timeout: int
     search_timeout: int
 
@@ -80,9 +79,6 @@ class RuntimeSettings(BaseSettings):
 
     max_parallel_subagents: int = Field(
         4, ge=1, le=32, validation_alias="MAX_PARALLEL_SUBAGENTS"
-    )
-    max_research_rounds: int = Field(
-        2, ge=1, le=10, validation_alias="MAX_RESEARCH_ROUNDS"
     )
     llm_request_timeout: int = Field(
         180, ge=1, validation_alias="LLM_REQUEST_TIMEOUT"
@@ -164,7 +160,6 @@ class RuntimeSettings(BaseSettings):
     def limits(self) -> RuntimeLimits:
         return RuntimeLimits(
             max_parallel_subagents=self.max_parallel_subagents,
-            max_research_rounds=self.max_research_rounds,
             llm_request_timeout=self.llm_request_timeout,
             search_timeout=self.search_timeout,
         )

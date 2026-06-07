@@ -49,4 +49,17 @@ def build_real_research_service(
         tool_registry=tools,
         evaluator=ExactQuoteEvaluator(),
         max_parallel_subagents=settings.limits.max_parallel_subagents,
+        trace_redactions=tuple(
+            secret
+            for secret in (
+                settings.llm.api_key.get_secret_value(),
+                settings.search.api_key.get_secret_value(),
+                (
+                    settings.tikhub.api_key.get_secret_value()
+                    if settings.tikhub is not None
+                    else ""
+                ),
+            )
+            if secret
+        ),
     )

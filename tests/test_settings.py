@@ -15,7 +15,6 @@ ENV_NAMES = {
     "TIKHUB_API_KEY",
     "TIKHUB_BASE_URL",
     "MAX_PARALLEL_SUBAGENTS",
-    "MAX_RESEARCH_ROUNDS",
     "LLM_REQUEST_TIMEOUT",
     "SEARCH_TIMEOUT",
 }
@@ -135,7 +134,6 @@ def test_runtime_limits_are_typed_and_bounded(tmp_path):
             "SEARCH_API_KEY": "search-secret",
             "SEARCH_BASE_URL": "https://search.example.test",
             "MAX_PARALLEL_SUBAGENTS": "6",
-            "MAX_RESEARCH_ROUNDS": "3",
             "LLM_REQUEST_TIMEOUT": "120",
             "SEARCH_TIMEOUT": "45",
         },
@@ -144,7 +142,6 @@ def test_runtime_limits_are_typed_and_bounded(tmp_path):
     settings = load_settings(env_file)
 
     assert settings.limits.max_parallel_subagents == 6
-    assert settings.limits.max_research_rounds == 3
     assert settings.limits.llm_request_timeout == 120
     assert settings.limits.search_timeout == 45
 

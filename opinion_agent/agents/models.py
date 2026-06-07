@@ -13,6 +13,17 @@ ResearchRoleId = Literal[
     "multimedia_researcher",
     "tikhub_researcher",
 ]
+ToolId = Literal[
+    "web_search",
+    "store_evidence",
+    "search_evidence",
+    "read_evidence",
+    "inspect_media",
+    "verify_citations",
+    "verify_claim_support",
+    "write_report",
+    "tikhub_search",
+]
 
 
 class ResearchTask(BaseModel):
@@ -41,7 +52,7 @@ class ResearchPlan(BaseModel):
 class ToolCallRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    tool_id: str = Field(min_length=1)
+    tool_id: ToolId
     arguments: dict = Field(default_factory=dict)
 
 
@@ -50,7 +61,10 @@ class SubagentActionPlan(BaseModel):
 
     task_id: str = Field(min_length=1)
     role_id: ResearchRoleId
-    tool_calls: tuple[ToolCallRecord, ...] = Field(min_length=1)
+    tool_calls: tuple[ToolCallRecord, ...] = Field(
+        min_length=1,
+        max_length=3,
+    )
 
 
 class SubagentResult(BaseModel):
@@ -77,10 +91,25 @@ class ClaimBundle(BaseModel):
         return self
 
 
-class ReportOutline(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class CitationSelection(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    title: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    candidate_id: str = Field(min_length=1)
+
+
+class CitationSelectionBundle(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    selections: tuple[CitationSelection, ...] = Field(
+        min_length=1,
+        max_length=1,
+    )
+
+
+class ReportOutline(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     ordered_claim_ids: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

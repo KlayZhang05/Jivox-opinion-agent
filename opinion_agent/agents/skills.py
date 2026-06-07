@@ -26,9 +26,9 @@ _SKILLS = {
     ),
     "gap_analysis": SkillDefinition(
         skill_id="gap_analysis",
-        purpose="Identify missing evidence and decide whether another round is justified.",
+        purpose="Identify evidence gaps while planning the bounded research round.",
         instructions=(
-            "Name the unresolved question before creating another task.",
+            "Name the unresolved question before creating a task.",
             "Do not repeat a completed query without a concrete reason.",
         ),
     ),

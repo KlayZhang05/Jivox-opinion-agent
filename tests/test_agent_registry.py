@@ -3,7 +3,13 @@ from types import MappingProxyType
 import pytest
 from pydantic import ValidationError
 
-from opinion_agent.agents.models import ResearchPlan, ResearchTask
+from opinion_agent.agents.models import (
+    ReportOutline,
+    ResearchPlan,
+    ResearchTask,
+    SubagentActionPlan,
+    ToolCallRecord,
+)
 from opinion_agent.agents.registry import (
     ROLE_REGISTRY,
     WORKER_ROLE_IDS,
@@ -110,4 +116,39 @@ def test_research_task_accepts_only_registered_worker_roles():
             role_id="report_writer",
             objective="Write before evidence collection.",
             rationale="Pipeline roles are not research fan-out workers.",
+        )
+
+
+def test_tool_call_contract_rejects_runtime_invented_tool_ids():
+    with pytest.raises(ValidationError):
+        ToolCallRecord(
+            tool_id="call_search_001",
+            arguments={"query": "event"},
+        )
+
+
+def test_subagent_action_plan_limits_tool_calls():
+    calls = tuple(
+        ToolCallRecord(
+            tool_id="web_search",
+            arguments={"query": f"event {index}"},
+        )
+        for index in range(4)
+    )
+
+    with pytest.raises(ValidationError):
+        SubagentActionPlan(
+            task_id="task-1",
+            role_id="query_agent",
+            tool_calls=calls,
+        )
+
+
+def test_report_outline_rejects_model_authored_prose():
+    with pytest.raises(ValidationError):
+        ReportOutline.model_validate(
+            {
+                "title": "Safe title\n\n## Unsupported conclusion",
+                "ordered_claim_ids": ["claim-1"],
+            }
         )

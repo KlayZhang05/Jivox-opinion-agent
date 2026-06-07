@@ -4,6 +4,11 @@
 
 **Goal:** Build the resume-ready LangGraph workflow in which a Forum Host selects fixed agent roles, launches real parallel LLM subagent calls, enforces role-specific Skills and Tool Sets, verifies evidence, and writes an auditable Markdown report.
 
+**Implementation status (2026-06-07):** Completed and verified. The unchecked
+step boxes below are retained as the original execution recipe; the current
+architecture boundary and verification evidence supersede intermediate command
+examples where noted.
+
 **Architecture:** Use an explicit async `StateGraph`. The Forum Host returns structured research tasks constrained to a fixed role registry; a conditional edge returns one `Send` per task; isolated subagent invocations run concurrently and append results through reducers. Provider adapters, tools, evidence verification, and trace persistence remain behind testable protocols so unit tests need no network credentials.
 
 **Tech Stack:** Python 3.11+, LangGraph, LangChain OpenAI-compatible chat models, Pydantic 2, pydantic-settings, httpx, pytest, pytest-asyncio
@@ -325,9 +330,14 @@ Build:
 START -> plan_research
 plan_research -> Send(run_subagent, task)*
 run_subagent -> prepare_claims
-prepare_claims -> verify_claims
-verify_claims -> write_report | END
-write_report -> END
+prepare_claims -> END
+
+ResearchService
+  -> persist evidence
+  -> Citation Agent
+  -> verify claims
+  -> Report Writer ordering
+  -> write report or reject
 ```
 
 Each `run_subagent` invocation resolves its immutable role definition, injects

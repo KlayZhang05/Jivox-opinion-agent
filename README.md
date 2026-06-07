@@ -19,9 +19,11 @@ research topic
        -> query_agent instance B -> authorized tools -> evidence
        -> other registered research roles when adapters are available
   -> reducer fan-in
-  -> Citation Agent: atomic ClaimInput records
+  -> deterministic candidate spans
+  -> Citation Agent: candidate ID selection
+  -> code materializes atomic ClaimInput records
   -> citation existence + claim support verification
-  -> Report Writer: title and verified-claim ordering only
+  -> Report Writer: verified-claim ordering only
   -> Markdown report + verification JSON + evidence JSONL + trace JSON
 ```
 
@@ -65,6 +67,9 @@ A model-generated or unknown evidence ID is rejected.
 Reports use a separate claim support gate:
 
 - `ClaimInput` declares `claim_type`, optional `scope`, and evidence IDs.
+- The Citation Agent selects a bounded candidate ID; it cannot author quote
+  text or evidence IDs.
+- Deterministic code materializes the exact source span as `ClaimInput.text`.
 - `ExactQuoteEvaluator` supports only `direct_quote`.
 - `factual_statement`, `opinion_summary`, and `analytic_inference` return
   `indeterminate` until a semantic evaluator is configured.
@@ -134,6 +139,9 @@ tests/          deterministic unit, concurrency, and end-to-end tests
 
 The approved active scope is documented in
 `docs/superpowers/specs/2026-06-06-evidence-research-agent-resume-scope-design.md`.
+A successful real-provider integration run, including measured overlapping
+worker call intervals, is recorded in
+`docs/verification/2026-06-07-real-provider-smoke.md`.
 
 ## Design Trade-offs
 
@@ -154,7 +162,7 @@ The approved active scope is documented in
   dynamic `Send` fan-out, reducer-based fan-in, and real parallel LLM
   subagent calls selected from an immutable role registry.
 - Designed role-scoped Skills and Tool Sets, deterministic evidence identity,
-  fail-closed claim support verification, and replayable sanitized traces for
+  fail-closed claim support verification, and inspectable sanitized traces for
   auditable report generation.
 
 ## Historical Prototypes

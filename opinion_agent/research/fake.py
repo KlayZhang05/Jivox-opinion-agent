@@ -5,7 +5,7 @@ import hashlib
 import json
 
 from opinion_agent.agents.models import (
-    ClaimBundle,
+    CitationSelectionBundle,
     ReportOutline,
     ResearchPlan,
     ResearchTask,
@@ -13,7 +13,6 @@ from opinion_agent.agents.models import (
     SubagentResult,
     ToolCallRecord,
 )
-from opinion_agent.citations.models import ClaimInput
 from opinion_agent.tools.registry import ToolDefinition, ToolRegistry
 from opinion_agent.tools.search import SearchOutput, SearchRequest, SearchResult
 
@@ -66,27 +65,24 @@ class FakeResearchModel:
                 summary="Collected one attributable fixture source.",
                 evidence_ids=tuple(payload["available_evidence_ids"]),
             )
-        if output_schema is ClaimBundle:
-            claims = tuple(
-                ClaimInput(
-                    claim_id=f"claim-{index}",
-                    claim_type="direct_quote",
-                    text=record["content"],
-                    scope={
-                        "platform": record["source_name"],
-                        "sample": "one deterministic fixture source",
-                    },
-                    evidence_ids=(record["evidence_id"],),
-                )
-                for index, record in enumerate(payload["evidence"], start=1)
+        if output_schema is CitationSelectionBundle:
+            return CitationSelectionBundle.model_validate(
+                {
+                    "selections": [
+                        {
+                            "claim_id": "claim-1",
+                            "candidate_id": payload["candidates"][0][
+                                "candidate_id"
+                            ],
+                        }
+                    ]
+                }
             )
-            return ClaimBundle(claims=claims)
         if output_schema is ReportOutline:
             claim_ids = tuple(
                 claim["claim_id"] for claim in payload["verified_claims"]
             )
             return ReportOutline(
-                title=f"{payload['topic']} evidence-constrained report",
                 ordered_claim_ids=claim_ids,
             )
         raise AssertionError(f"Unexpected output schema: {output_schema}")

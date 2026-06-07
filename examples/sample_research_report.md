@@ -1,36 +1,23 @@
-# Sample bounded event evidence-constrained report
+# Sample bounded event Public Opinion Report
 
-Date: 2026-06-06
+Date: 2026-06-07
 
 ## Evidence-grounded claims
 
 ### claim-1
 
-Fixture source observation for query: Find direct reporting about Sample bounded event.
+Claim: Fixture source observation for query: Find direct reporting about Sample bounded event.
 
 Claim type: direct_quote
 Platform: deterministic_fixture
-Sample: one deterministic fixture source
-Evidence: ev-ad40ea28309905651743cf30
+Sample: single collected source excerpt
+Time window: 2026-06-06 to 2026-06-06
+Evidence: ev-fa60fd17e5ec6d00345b08c0
 Exact excerpt: Fixture source observation for query: Find direct reporting about Sample bounded event.
 Source: deterministic_fixture
 Source type: web_search
 Title: Deterministic research fixture
 URL: https://example.test/research/f6d01eec73b3
-
-### claim-2
-
-Fixture source observation for query: Find a bounded public reaction to Sample bounded event.
-
-Claim type: direct_quote
-Platform: deterministic_fixture
-Sample: one deterministic fixture source
-Evidence: ev-184b58964582d951e38ab284
-Exact excerpt: Fixture source observation for query: Find a bounded public reaction to Sample bounded event.
-Source: deterministic_fixture
-Source type: web_search
-Title: Deterministic research fixture
-URL: https://example.test/research/43498d3b030b
 
 ## Citation and support gate
 

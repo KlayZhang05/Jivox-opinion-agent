@@ -24,7 +24,7 @@ research question
   -> normalized evidence records
   -> claim and citation verification
   -> evidence-grounded Markdown report
-  -> replayable execution trace
+  -> inspectable execution trace
 ```
 
 ## Fixed Role Registry
@@ -40,8 +40,7 @@ The Forum Host may instantiate only these predefined roles:
 - `tikhub_researcher`
 
 Roles cannot be created at runtime. The Forum Host may omit unnecessary roles,
-start multiple instances of one role, and add a second research round when
-evidence gaps remain.
+and start multiple instances of one role within one bounded research round.
 
 Each role definition binds:
 
@@ -51,9 +50,19 @@ Each role definition binds:
 - a Tool Set whitelist;
 - input and output schemas;
 - a model profile ID;
-- concurrency and cost limits.
+- instance and tool-call limits.
 
 The Forum Host assigns tasks but cannot modify a role's Skills or Tool Set.
+
+## Runtime Boundary
+
+LangGraph owns structured planning, dynamic research fan-out, worker execution,
+and reducer-based fan-in. A deterministic service boundary owns evidence
+persistence, Citation Agent invocation, support verification, Report Writer
+ordering, and atomic artifact output.
+
+This resume slice intentionally runs one bounded research round. Iterative
+gap-driven rounds and monetary token budgets are follow-on work.
 
 ## Parallel Subagents
 

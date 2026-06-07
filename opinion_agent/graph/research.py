@@ -28,6 +28,10 @@ class ResearchPlanLimitError(ValueError):
     """Raised when a model-generated plan exceeds configured role limits."""
 
 
+class ResearchPlanCapabilityError(ValueError):
+    """Raised when a plan selects a role without installed tool adapters."""
+
+
 def fan_out_research_tasks(state: ResearchState) -> list[Send]:
     plan = state.get("plan")
     if plan is None:
@@ -53,6 +57,21 @@ def build_research_graph(
 ):
     if max_parallel_subagents < 1:
         raise ValueError("max_parallel_subagents must be greater than 0")
+    installed_tool_ids = {
+        definition.tool_id for definition in tool_registry.list_tools()
+    }
+    executable_role_ids = tuple(
+        role_id
+        for role_id in (
+            "query_agent",
+            "database_researcher",
+            "multimedia_researcher",
+            "tikhub_researcher",
+        )
+        if get_role(role_id).tool_ids & installed_tool_ids
+    )
+    if not executable_role_ids:
+        raise ValueError("At least one research role needs an installed tool")
 
     async def plan_research(state: ResearchState):
         topic = state.get("topic", "").strip()
@@ -68,13 +87,16 @@ def build_research_graph(
             user_prompt=(
                 "Create a bounded research plan for this topic:\n"
                 f"{topic}\n\n"
-                "Use only research roles from the fixed registry."
+                "Copy the requested topic verbatim into the plan topic field. "
+                "Use only these currently executable roles from the fixed "
+                f"registry: {', '.join(executable_role_ids)}."
             ),
             output_schema=ResearchPlan,
         )
-        if plan.topic.strip().casefold() != topic.casefold():
-            raise ValueError("Research plan topic must match the requested topic")
+        if plan.topic != topic:
+            plan = plan.model_copy(update={"topic": topic})
         _validate_plan_limits(plan, max_parallel_subagents)
+        _validate_plan_capabilities(plan, executable_role_ids)
         return {
             "plan": plan,
             "stage": "planned",
@@ -95,7 +117,13 @@ def build_research_graph(
                 TraceEvent(
                     event_type="research_plan_created",
                     role_id="forum_host",
-                    metadata={"task_count": len(plan.tasks)},
+                    metadata={
+                        "task_count": len(plan.tasks),
+                        "tasks": [
+                            task.model_dump(mode="json")
+                            for task in plan.tasks
+                        ],
+                    },
                 )
             ],
         }
@@ -103,12 +131,15 @@ def build_research_graph(
     async def run_subagent(state: SubagentInput):
         task = state["task"]
         role = get_role(task.role_id)
+        permitted_tools = tuple(
+            sorted(role.tool_ids & installed_tool_ids)
+        )
         prompt_payload = {
             "topic": state["topic"],
             "task_id": task.task_id,
             "objective": task.objective,
             "rationale": task.rationale,
-            "permitted_tools": sorted(role.tool_ids),
+            "permitted_tools": permitted_tools,
         }
         try:
             action_started = time.perf_counter()
@@ -117,7 +148,8 @@ def build_research_graph(
                     f"{role.system_prompt}\n\n"
                     f"{render_skill_bundle(role.skill_ids)}\n\n"
                     "Propose only the tool calls needed for this task. Use only "
-                    "the permitted tools listed in the task payload."
+                    "the permitted tools listed in the task payload. The tool_id "
+                    "must exactly equal one of those names; do not create a call ID."
                 ),
                 user_prompt=json.dumps(
                     prompt_payload,
@@ -126,13 +158,12 @@ def build_research_graph(
                 ),
                 output_schema=SubagentActionPlan,
             )
-            if (
-                action_plan.task_id != task.task_id
-                or action_plan.role_id != task.role_id
-            ):
-                raise ModelOutputError(
-                    "Subagent action identity does not match assigned task"
-                )
+            action_plan = action_plan.model_copy(
+                update={
+                    "task_id": task.task_id,
+                    "role_id": task.role_id,
+                }
+            )
             evidence_records = []
             tool_payloads = []
             trace_events = [
@@ -153,6 +184,11 @@ def build_research_graph(
                 )
             ]
             for tool_call in action_plan.tool_calls:
+                if tool_call.tool_id not in permitted_tools:
+                    raise ModelOutputError(
+                        f"Tool {tool_call.tool_id} is not currently available "
+                        f"to role {task.role_id}"
+                    )
                 tool_started = time.perf_counter()
                 tool_result = await tool_registry.invoke(
                     role_id=task.role_id,
@@ -173,6 +209,7 @@ def build_research_graph(
                         task_id=task.task_id,
                         metadata={
                             "tool_id": tool_call.tool_id,
+                            "arguments": tool_call.arguments,
                             "ok": tool_result.ok,
                             "evidence_count": len(normalized),
                             "duration_ms": _elapsed_ms(tool_started),
@@ -214,10 +251,12 @@ def build_research_graph(
                     },
                 )
             )
-            if result.task_id != task.task_id or result.role_id != task.role_id:
-                raise ModelOutputError(
-                    "Subagent result identity does not match assigned task"
-                )
+            result = result.model_copy(
+                update={
+                    "task_id": task.task_id,
+                    "role_id": task.role_id,
+                }
+            )
             unavailable_ids = sorted(set(result.evidence_ids) - set(available_ids))
             if unavailable_ids:
                 raise ModelOutputError(
@@ -329,3 +368,21 @@ def _validate_plan_limits(
                 f"Research plan assigns {count} instances to {role_id}, "
                 f"exceeding its limit of {role_limit}"
             )
+
+
+def _validate_plan_capabilities(
+    plan: ResearchPlan,
+    executable_role_ids: tuple[str, ...],
+) -> None:
+    unavailable = sorted(
+        {
+            task.role_id
+            for task in plan.tasks
+            if task.role_id not in executable_role_ids
+        }
+    )
+    if unavailable:
+        raise ResearchPlanCapabilityError(
+            "Research plan selected role(s) without installed tool adapters: "
+            + ", ".join(unavailable)
+        )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -26,22 +27,25 @@ def write_run_trace(
     status: str,
     events: Iterable[TraceEvent | dict[str, Any]],
     errors: Iterable[str],
+    secret_values: Iterable[str] = (),
 ) -> Path:
+    secrets = tuple(secret for secret in secret_values if secret)
     destination = Path(path)
     payload = {
         "schema_version": "1.0",
-        "run_id": run_id,
-        "topic": topic,
-        "status": status,
+        "run_id": _redact(run_id, secrets),
+        "topic": _redact(topic, secrets),
+        "status": _redact(status, secrets),
         "events": [
             _sanitize(
                 event.model_dump(mode="json")
                 if isinstance(event, TraceEvent)
-                else event
+                else event,
+                secrets,
             )
             for event in events
         ],
-        "errors": list(errors),
+        "errors": [_redact(error, secrets) for error in errors],
     }
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".tmp")
@@ -53,15 +57,28 @@ def write_run_trace(
     return destination
 
 
-def _sanitize(value: Any) -> Any:
+def _sanitize(value: Any, secrets: tuple[str, ...]) -> Any:
     if isinstance(value, dict):
         return {
-            key: _sanitize(item)
+            key: _sanitize(item, secrets)
             for key, item in value.items()
             if key.casefold() not in _FORBIDDEN_KEYS
         }
     if isinstance(value, list):
-        return [_sanitize(item) for item in value]
+        return [_sanitize(item, secrets) for item in value]
     if isinstance(value, tuple):
-        return [_sanitize(item) for item in value]
+        return [_sanitize(item, secrets) for item in value]
+    if isinstance(value, str):
+        return _redact(value, secrets)
     return value
+
+
+def _redact(value: str, secrets: tuple[str, ...]) -> str:
+    redacted = value
+    for secret in secrets:
+        redacted = redacted.replace(secret, "***")
+    return re.sub(
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
+        "Bearer ***",
+        redacted,
+    )

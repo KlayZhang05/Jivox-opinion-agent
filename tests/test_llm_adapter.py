@@ -144,3 +144,27 @@ def test_research_plan_schema_is_usable_by_structured_models():
     )
 
     assert ResearchPlan.model_validate(plan.model_dump()) == plan
+
+
+def test_real_adapter_uses_deterministic_temperature(monkeypatch):
+    captured = {}
+
+    class ConstructorFixture:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "opinion_agent.llm.openai_compatible.ChatOpenAI",
+        ConstructorFixture,
+    )
+
+    OpenAICompatibleStructuredModel(
+        settings=LLMSettings(
+            api_key="llm-secret",
+            base_url="https://llm.example.test/v1",
+            model_name="test-model",
+        ),
+        timeout_seconds=30,
+    )
+
+    assert captured["temperature"] == 0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -11,6 +12,7 @@ ClaimType = Literal[
     "opinion_summary",
     "analytic_inference",
 ]
+ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
 SupportVerdict = Literal[
     "supported",
     "unsupported",
@@ -51,7 +53,7 @@ class ClaimScope(BaseModel):
 class ClaimInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    claim_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1, pattern=ID_PATTERN)
     claim_type: ClaimType
     text: str = Field(min_length=1)
     scope: ClaimScope | None = None
@@ -66,8 +68,11 @@ class ClaimInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_evidence_ids(self):
-        if any(not evidence_id.strip() for evidence_id in self.evidence_ids):
-            raise ValueError("evidence IDs must not be blank")
+        if any(
+            re.fullmatch(ID_PATTERN, evidence_id) is None
+            for evidence_id in self.evidence_ids
+        ):
+            raise ValueError("evidence IDs contain unsupported characters")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
             raise ValueError("evidence IDs must be unique")
         return self
@@ -76,7 +81,7 @@ class ClaimInput(BaseModel):
 class EvidenceSpan(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    evidence_id: str = Field(min_length=1)
+    evidence_id: str = Field(min_length=1, pattern=ID_PATTERN)
     quote: str = Field(min_length=1)
 
 

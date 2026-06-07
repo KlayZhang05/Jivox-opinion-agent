@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import html
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -21,7 +23,6 @@ class ReportArtifacts:
 def write_report_artifacts(
     *,
     topic: str,
-    report_title: str | None = None,
     claims: list[dict[str, Any] | ClaimInput],
     evidence_store: EvidenceStore,
     evaluator: SupportEvaluator,
@@ -47,12 +48,7 @@ def write_report_artifacts(
     if errors:
         raise ValueError("; ".join(errors))
 
-    markdown = _render_markdown(
-        topic,
-        results,
-        evidence_store,
-        report_title=report_title,
-    )
+    markdown = _render_markdown(topic, results, evidence_store)
     sidecar = {
         "schema_version": "1.0",
         "topic": topic,
@@ -87,11 +83,9 @@ def _render_markdown(
     topic: str,
     results: list[ClaimVerificationResult],
     evidence_store: EvidenceStore,
-    *,
-    report_title: str | None = None,
 ) -> str:
     lines = [
-        f"# {report_title or f'{topic} Public Opinion Report'}",
+        f"# {_safe_inline(topic)} Public Opinion Report",
         "",
         f"Date: {date.today().isoformat()}",
         "",
@@ -107,32 +101,34 @@ def _render_markdown(
             record["evidence_id"]: record
             for record in evidence_store.get_many(claim.evidence_ids)
         }
-        lines.append(f"### {claim.claim_id}")
+        lines.append(f"### {_safe_inline(claim.claim_id)}")
         lines.append("")
-        lines.append(claim.text)
+        lines.append(f"Claim: {_safe_inline(claim.text)}")
         lines.append("")
         lines.append(f"Claim type: {claim.claim_type}")
         if claim.scope is not None:
             if claim.scope.platform:
-                lines.append(f"Platform: {claim.scope.platform}")
+                lines.append(
+                    f"Platform: {_safe_inline(claim.scope.platform)}"
+                )
             if claim.scope.sample:
-                lines.append(f"Sample: {claim.scope.sample}")
+                lines.append(f"Sample: {_safe_inline(claim.scope.sample)}")
             if claim.scope.time_window:
                 lines.append(
                     "Time window: "
-                    f"{claim.scope.time_window.start or 'unspecified'} to "
-                    f"{claim.scope.time_window.end or 'unspecified'}"
+                    f"{_safe_inline(claim.scope.time_window.start or 'unspecified')} to "
+                    f"{_safe_inline(claim.scope.time_window.end or 'unspecified')}"
                 )
         for span in assessment.supporting_spans:
             evidence = evidence_by_id[span.evidence_id]
             lines.extend(
                 [
-                    f"Evidence: {span.evidence_id}",
-                    f"Exact excerpt: {span.quote}",
-                    f"Source: {evidence.get('source_name', '')}",
-                    f"Source type: {evidence.get('source_type', '')}",
-                    f"Title: {evidence.get('title', '')}",
-                    f"URL: {evidence.get('url') or 'not provided'}",
+                    f"Evidence: {_safe_inline(span.evidence_id)}",
+                    f"Exact excerpt: {_safe_inline(span.quote)}",
+                    f"Source: {_safe_inline(evidence.get('source_name', ''))}",
+                    f"Source type: {_safe_inline(evidence.get('source_type', ''))}",
+                    f"Title: {_safe_inline(evidence.get('title', ''))}",
+                    f"URL: {_safe_inline(evidence.get('url') or 'not provided')}",
                 ]
             )
         lines.append("")
@@ -147,3 +143,9 @@ def _render_markdown(
         ]
     )
     return "\n".join(lines)
+
+
+def _safe_inline(value: Any) -> str:
+    text = " ".join(str(value).splitlines())
+    escaped = html.escape(text, quote=False)
+    return re.sub(r"([\\`*{}\[\]#|])", r"\\\1", escaped)

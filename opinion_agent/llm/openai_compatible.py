@@ -24,6 +24,7 @@ class OpenAICompatibleStructuredModel:
             api_key=settings.api_key.get_secret_value(),
             base_url=settings.base_url,
             model=settings.model_name,
+            temperature=0,
             timeout=timeout_seconds,
             max_retries=2,
         )

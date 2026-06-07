@@ -86,17 +86,17 @@ _ROLES = {
     ),
     "citation_agent": RoleDefinition(
         role_id="citation_agent",
-        responsibility="Atomize claims and audit citation support.",
+        responsibility="Select bounded source spans for deterministic claims.",
         system_prompt=(
-            "You are the citation subagent. Fail closed when a claim lacks "
-            "traceable supporting evidence."
+            "You are the citation subagent. Select only supplied source-span "
+            "candidates and fail closed when none fits the bounded topic."
         ),
         skill_ids=("claim_atomization", "citation_audit"),
         tool_ids=frozenset(
             {"read_evidence", "verify_citations", "verify_claim_support"}
         ),
         input_schema="EvidenceBundle",
-        output_schema="VerifiedClaims",
+        output_schema="CitationSelectionBundle",
         max_instances=2,
     ),
     "report_writer": RoleDefinition(

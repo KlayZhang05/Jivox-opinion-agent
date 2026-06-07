@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import BaseModel, ConfigDict
 
@@ -11,6 +13,7 @@ from opinion_agent.agents.models import (
     ToolCallRecord,
 )
 from opinion_agent.graph.research import (
+    ResearchPlanCapabilityError,
     ResearchPlanLimitError,
     build_research_graph,
     fan_out_research_tasks,
@@ -189,7 +192,41 @@ async def test_graph_rejects_plan_above_role_instance_limit():
         await graph.ainvoke({"topic": "Bounded event"})
 
 
+@pytest.mark.asyncio
+async def test_graph_rejects_role_without_an_installed_tool_adapter():
+    plan = ResearchPlan(
+        topic="Bounded event",
+        tasks=(
+            ResearchTask(
+                task_id="task-1",
+                role_id="tikhub_researcher",
+                objective="Collect platform posts.",
+                rationale="Inspect a bounded social sample.",
+            ),
+        ),
+    )
+    graph = build_research_graph(
+        model=BarrierStructuredModel(plan=plan),
+        tool_registry=tool_registry(),
+        max_parallel_subagents=4,
+    )
+
+    with pytest.raises(ResearchPlanCapabilityError, match="tikhub_researcher"):
+        await graph.ainvoke({"topic": "Bounded event"})
+
+
 class FabricatingModel:
+    def __init__(
+        self,
+        *,
+        plan_topic="Bounded event",
+        rewrite_identity=False,
+        fabricate_evidence=True,
+    ):
+        self.plan_topic = plan_topic
+        self.rewrite_identity = rewrite_identity
+        self.fabricate_evidence = fabricate_evidence
+
     async def ainvoke(
         self,
         *,
@@ -199,7 +236,7 @@ class FabricatingModel:
     ):
         if output_schema is ResearchPlan:
             return ResearchPlan(
-                topic="Bounded event",
+                topic=self.plan_topic,
                 tasks=(
                     ResearchTask(
                         task_id="task-1",
@@ -211,8 +248,14 @@ class FabricatingModel:
             )
         if output_schema is SubagentActionPlan:
             return SubagentActionPlan(
-                task_id="task-1",
-                role_id="query_agent",
+                task_id=(
+                    "rewritten-task" if self.rewrite_identity else "task-1"
+                ),
+                role_id=(
+                    "database_researcher"
+                    if self.rewrite_identity
+                    else "query_agent"
+                ),
                 tool_calls=(
                     ToolCallRecord(
                         tool_id="web_search",
@@ -221,11 +264,23 @@ class FabricatingModel:
                 ),
             )
         if output_schema is SubagentResult:
+            payload = json.loads(user_prompt)
+            evidence_ids = (
+                ("ev-does-not-exist",)
+                if self.fabricate_evidence
+                else tuple(payload["available_evidence_ids"])
+            )
             return SubagentResult(
-                task_id="task-1",
-                role_id="query_agent",
+                task_id=(
+                    "rewritten-task" if self.rewrite_identity else "task-1"
+                ),
+                role_id=(
+                    "database_researcher"
+                    if self.rewrite_identity
+                    else "query_agent"
+                ),
                 summary="A fabricated citation.",
-                evidence_ids=("ev-does-not-exist",),
+                evidence_ids=evidence_ids,
             )
         raise AssertionError(output_schema)
 
@@ -243,3 +298,38 @@ async def test_graph_rejects_model_generated_evidence_ids():
     assert result["subagent_results"][0].evidence_ids == ()
     assert "unavailable evidence IDs" in result["subagent_results"][0].errors[0]
     assert any("ev-does-not-exist" in error for error in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_requested_topic_remains_canonical_when_planner_rewrites_it():
+    graph = build_research_graph(
+        model=FabricatingModel(
+            plan_topic="Rewritten topic with extra interpretation"
+        ),
+        tool_registry=tool_registry(),
+        max_parallel_subagents=2,
+    )
+
+    result = await graph.ainvoke({"topic": "Bounded event"})
+
+    assert result["plan"].topic == "Bounded event"
+
+
+@pytest.mark.asyncio
+async def test_runtime_assignment_remains_canonical_when_worker_rewrites_identity():
+    graph = build_research_graph(
+        model=FabricatingModel(
+            rewrite_identity=True,
+            fabricate_evidence=False,
+        ),
+        tool_registry=tool_registry(),
+        max_parallel_subagents=2,
+    )
+
+    result = await graph.ainvoke({"topic": "Bounded event"})
+
+    worker = result["subagent_results"][0]
+    assert worker.task_id == "task-1"
+    assert worker.role_id == "query_agent"
+    assert worker.errors == ()
+    assert worker.evidence_ids

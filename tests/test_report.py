@@ -96,3 +96,68 @@ def test_duplicate_claim_ids_write_no_artifacts(tmp_path):
         )
 
     assert report_path.exists() is False
+
+
+def test_report_title_is_deterministic_and_not_model_authored(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.jsonl")
+    store.append(evidence_record())
+
+    artifacts = write_report_artifacts(
+        topic="Local event",
+        claims=[direct_quote_claim()],
+        evidence_store=store,
+        evaluator=ExactQuoteEvaluator(),
+        report_path=tmp_path / "report.md",
+    )
+
+    markdown = artifacts.report_path.read_text(encoding="utf-8")
+    assert markdown.startswith("# Local event Public Opinion Report")
+
+
+def test_report_escapes_markdown_structure_from_untrusted_text(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.jsonl")
+    record = evidence_record()
+    record.update(
+        {
+            "source_name": "Source\n## Injected source",
+            "title": "<script>alert(1)</script>",
+            "content": "Quoted text\n## Injected claim",
+        }
+    )
+    store.append(record)
+
+    artifacts = write_report_artifacts(
+        topic="Local event\n## Injected topic",
+        claims=[
+            direct_quote_claim(text="Quoted text\n## Injected claim")
+        ],
+        evidence_store=store,
+        evaluator=ExactQuoteEvaluator(),
+        report_path=tmp_path / "report.md",
+    )
+
+    markdown = artifacts.report_path.read_text(encoding="utf-8")
+    assert "\n## Injected topic" not in markdown
+    assert "\n## Injected claim" not in markdown
+    assert "\n## Injected source" not in markdown
+    assert "<script>" not in markdown
+    assert "&lt;script&gt;" in markdown
+
+
+def test_report_claim_text_cannot_become_a_thematic_break(tmp_path):
+    store = EvidenceStore(tmp_path / "evidence.jsonl")
+    record = evidence_record()
+    record["content"] = "---"
+    store.append(record)
+
+    artifacts = write_report_artifacts(
+        topic="Local event",
+        claims=[direct_quote_claim(text="---")],
+        evidence_store=store,
+        evaluator=ExactQuoteEvaluator(),
+        report_path=tmp_path / "report.md",
+    )
+
+    markdown = artifacts.report_path.read_text(encoding="utf-8")
+    assert "\n---\n" not in markdown
+    assert "Claim: ---" in markdown
