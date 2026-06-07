@@ -8,6 +8,7 @@ dynamic parallel subagents.
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Runtime-1C3C3C)
 ![Pydantic](https://img.shields.io/badge/Pydantic-Structured_Output-E92063)
 ![Tests](https://img.shields.io/badge/tests-99%20passed-2EA44F)
+
 [简体中文](README.zh-CN.md) | English
 
 ## Architecture
