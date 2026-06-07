@@ -503,13 +503,6 @@ docs/
 - 如何评估一个 Agent 报告的证据覆盖率，而不仅是已有 claim 的正确率？
 - 如何在检索成本、并行度、证据多样性和报告质量之间进行可测量优化？
 
-## 进一步阅读
-
-- [英文 README](README.md)
-- [项目面试与技术详解](docs/PROJECT_INTERVIEW_GUIDE.zh-CN.md)
-- [当前研究智能体范围设计](docs/superpowers/specs/2026-06-06-evidence-research-agent-resume-scope-design.md)
-- [Claim-Evidence 支持门禁设计](docs/superpowers/specs/2026-06-06-claim-evidence-support-gate-design.md)
-- [真实服务 smoke 验证](docs/verification/2026-06-07-real-provider-smoke.md)
 
 ## License
 
