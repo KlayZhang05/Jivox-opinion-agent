@@ -1,5 +1,7 @@
 # Personal Opinion Agent
 
+[简体中文](README.zh-CN.md) | English
+
 LangGraph-based evidence-constrained public-opinion research agent with
 dynamic parallel subagents.
 
