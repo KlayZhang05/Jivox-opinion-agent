@@ -15,13 +15,7 @@ claim-to-evidence verification.
 
 [简体中文](README.zh-CN.md) · **English**
 
-</div>
 
-The project is intentionally scoped as an inspectable agent-engineering
-portfolio project rather than a production monitoring platform. A Forum Host
-plans bounded research, launches temporary instances of predefined agent
-roles, executes role-authorized tools, stores normalized evidence, and emits a
-report only when every claim passes a fail-closed support gate.
 
 ## Architecture
 
