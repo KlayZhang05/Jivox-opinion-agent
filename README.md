@@ -1,6 +1,7 @@
+<div align="center">
 # JiWen Opinion Agent
 
-
+**稽闻，无稽之谈则不闻！**
 
 LangGraph-based evidence-constrained public-opinion research agent with
 dynamic parallel subagents.
@@ -11,6 +12,8 @@ dynamic parallel subagents.
 ![Tests](https://img.shields.io/badge/tests-99%20passed-2EA44F)
 
 [简体中文](README.zh-CN.md) | English
+
+</div>
 
 ## Architecture
 
