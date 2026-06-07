@@ -4,6 +4,7 @@
 
 LangGraph-based evidence-constrained public-opinion research agent with
 dynamic parallel subagents.
+
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Runtime-1C3C3C)
 ![Pydantic](https://img.shields.io/badge/Pydantic-Structured_Output-E92063)
