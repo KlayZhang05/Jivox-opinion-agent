@@ -1,8 +1,19 @@
-# Personal Opinion Agent
+<div align="center">
 
-[English](README.md) | **简体中文**
+# 稽闻 · JiWen Opinion Agent
 
-一个基于 LangGraph 的**有界证据研究智能体**。项目以固定角色、真实并行的 LLM 子智能体、受控工具调用、可追溯证据和失败关闭的引用门禁为核心，展示一条从研究规划到报告产出的完整 Agent 工程链路。
+**稽闻，无稽之谈则不闻！**
+
+基于 LangGraph 的有界舆情证据研究智能体，以动态并行子智能体、受控工具调用和可审计的证据链约束研究报告生成。
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Runtime-1C3C3C)
+![Pydantic](https://img.shields.io/badge/Pydantic-Structured_Output-E92063)
+![Tests](https://img.shields.io/badge/tests-99%20passed-2EA44F)
+
+**简体中文** · [English](README.md)
+
+</div>
 
 > [!IMPORTANT]
 > 本项目定位为简历 / 作品集尺度的 Agent 工程项目，不是生产级舆情监控平台。当前主流程处理用户主动提交的单个有界话题，执行一轮研究并生成可检查的本地报告；它尚不包含持续监控、定时采集、完整社交媒体接入、来源可信度判断或总体舆情代表性分析。

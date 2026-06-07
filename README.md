@@ -1,9 +1,21 @@
-# Personal Opinion Agent
+<div align="center">
 
-[简体中文](README.zh-CN.md) | English
+# JiWen Opinion Agent · 稽闻
 
-LangGraph-based evidence-constrained public-opinion research agent with
-dynamic parallel subagents.
+**稽闻，无稽之谈则不闻！**
+
+An evidence-constrained public-opinion research agent built with LangGraph,
+featuring dynamic parallel subagents, controlled tool use, and auditable
+claim-to-evidence verification.
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Runtime-1C3C3C)
+![Pydantic](https://img.shields.io/badge/Pydantic-Structured_Output-E92063)
+![Tests](https://img.shields.io/badge/tests-99%20passed-2EA44F)
+
+[简体中文](README.zh-CN.md) · **English**
+
+</div>
 
 The project is intentionally scoped as an inspectable agent-engineering
 portfolio project rather than a production monitoring platform. A Forum Host
